@@ -1,105 +1,73 @@
-# Web 2 Frontend
+# Welcome to your Lovable project
 
-Frontend de la aplicación Web 2 construido con React 19, Vite, TypeScript y Material UI.
+## Project info
 
-## Requisitos Previos
+**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
-- Node.js 20+
-- Backend (`web-2-backend`) ejecutándose en `http://localhost:3000`
+## How can I edit this code?
 
-## Instalación
+There are several ways of editing your application.
 
-```bash
-# Instalar dependencias
-npm install
-# o
-pnpm install
-# o
-bun install
-```
+**Use Lovable**
 
-## Configuración
+Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
 
-Crea un archivo `.env` en la raíz del proyecto:
+Changes made via Lovable will be committed automatically to this repo.
 
-```env
-VITE_API_URL=http://localhost:3000
-```
+**Use your preferred IDE**
 
-## Scripts Disponibles
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-```bash
-# Iniciar servidor de desarrollo
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
+
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
-
-# Construir para producción
-npm run build
-
-# Vista previa de producción
-npm run preview
-
-# Linting
-npm run lint
 ```
 
-## Arquitectura del Proyecto
+**Edit a file directly in GitHub**
 
-```
-src/
-├── api/                    # Cliente API (Axios)
-│   ├── axios-client.ts     # Instancia de Axios configurada
-│   ├── toProccess.ts       # Wrapper para transacciones
-│   └── auth.ts             # Funciones de autenticación
-├── components/
-│   ├── ui/                 # Componentes UI base (MUI)
-│   └── layout/             # Layout principal
-├── context/
-│   └── AuthContext.tsx     # Contexto de autenticación
-├── hooks/
-│   ├── useTx.ts            # Hook para ejecutar transacciones
-│   └── useAuth.ts          # Hook helper de autenticación
-├── pages/                  # Páginas de la aplicación
-├── router/                 # Configuración de rutas
-├── types/                  # Tipos TypeScript
-└── config/                 # Configuración de tema, etc.
-```
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-## Flujo de Autenticación
+**Use GitHub Codespaces**
 
-1. El usuario visita `/login`
-2. Se obtiene el token CSRF del backend
-3. Se envían credenciales a `POST /login`
-4. El backend crea sesión y devuelve cookie
-5. El frontend guarda el usuario en AuthContext
-6. Rutas protegidas redirigen a login si no hay sesión
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## Transacciones (toProccess)
+## What technologies are used for this project?
 
-El backend usa un sistema de transacciones. Para llamar una transacción:
+This project is built with:
 
-```typescript
-import { useTx } from '@/hooks'
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-const TX_AUTH_LOGIN = 1001
+## How can I deploy this project?
 
-function MyComponent() {
-  const { executeTx, loading, error } = useTx<void>(TX_AUTH_LOGIN)
-  
-  const handleAction = async () => {
-    const result = await executeTx({ email: 'test@test.com' })
-    // result contiene la respuesta de la transacción
-  }
-  
-  return <button onClick={handleAction} disabled={loading}>Ejecutar</button>
-}
-```
+Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
-## Conexión con el Backend
+## Can I connect a custom domain to my Lovable project?
 
-El frontend está configurado con un proxy en desarrollo que reenvía:
-- `/toProccess` → Backend
-- `/login` → Backend
-- `/logout` → Backend
-- `/csrf` → Backend
+Yes, you can!
 
-Para producción, configura `VITE_API_URL` con la URL del backend.
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
