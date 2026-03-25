@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import URULogo from "@/components/URULogo";
-import { ArrowLeft, CheckCircle, KeyRound, Mail, User } from "lucide-react";
+import { ArrowLeft, CheckCircle, KeyRound, Mail, User, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 
 type RecoveryMode = "usuario" | "clave";
@@ -16,7 +17,7 @@ const ForgotPassword = () => {
   const mode: RecoveryMode = searchParams.get("mode") === "usuario" ? "usuario" : "clave";
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { resetPassword } = useAuth();
+  const { requestPasswordReset, verifyPasswordReset, resetPassword, requestUsername } = useAuth();
 
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -24,15 +25,32 @@ const ForgotPassword = () => {
   const [nuevaClave, setNuevaClave] = useState("");
   const [confirmarClave, setConfirmarClave] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleEnviarCorreo = (e: React.FormEvent) => {
+  const handleEnviarCorreo = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email.trim() || !email.includes("@")) {
       setError("Ingrese un correo electrónico válido");
       return;
     }
-    setStep("notificacion");
+    setIsLoading(true);
+    try {
+      if (mode === "usuario") {
+        await requestUsername(email);
+      } else {
+        await requestPasswordReset(email);
+      }
+      setStep("notificacion");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.alerts?.join(", ") || err.message);
+      } else {
+        setError("Error de conexión. Intente de nuevo.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleContinuarDesdeNotificacion = () => {
@@ -47,37 +65,56 @@ const ForgotPassword = () => {
     }
   };
 
-  const handleVerificarCodigo = (e: React.FormEvent) => {
+  const handleVerificarCodigo = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!codigo.trim()) {
-      setError("Ingrese el código de verificación");
+    if (!codigo.trim() || codigo.length !== 6) {
+      setError("Ingrese el código de 6 dígitos");
       return;
     }
-    if (codigo === "1234") {
+    setIsLoading(true);
+    try {
+      await verifyPasswordReset(codigo);
       setStep("nueva-clave");
-    } else {
-      setError("Código incorrecto. Use 1234 para la demo.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.alerts?.join(", ") || err.message);
+      } else {
+        setError("Error de conexión. Intente de nuevo.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleCambiarClave = (e: React.FormEvent) => {
+  const handleCambiarClave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!nuevaClave.trim()) {
       setError("Ingrese la nueva clave");
       return;
     }
-    if (nuevaClave.length < 4) {
-      setError("La clave debe tener al menos 4 caracteres");
+    if (nuevaClave.length < 8) {
+      setError("La clave debe tener al menos 8 caracteres");
       return;
     }
     if (nuevaClave !== confirmarClave) {
       setError("Las claves no coinciden");
       return;
     }
-    resetPassword(email, nuevaClave);
-    setStep("exito");
+    setIsLoading(true);
+    try {
+      await resetPassword(codigo, nuevaClave);
+      setStep("exito");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.alerts?.join(", ") || err.message);
+      } else {
+        setError("Error de conexión. Intente de nuevo.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const titles: Record<Step, string> = {
@@ -91,8 +128,8 @@ const ForgotPassword = () => {
   const descriptions: Record<Step, string> = {
     email: "Ingrese su correo electrónico registrado",
     notificacion: "Revise la bandeja de entrada de su correo",
-    codigo: "Ingrese el código enviado a su correo",
-    "nueva-clave": "Establezca su nueva clave de acceso",
+    codigo: "Ingrese el código de 6 dígitos enviado a su correo",
+    "nueva-clave": "Establezca su nueva clave de acceso (mínimo 8 caracteres)",
     exito: "Su clave ha sido cambiada exitosamente",
   };
 
@@ -135,11 +172,12 @@ const ForgotPassword = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ejemplo@correo.com"
                   className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                  disabled={isLoading}
                 />
               </div>
               {error && <p className="text-destructive text-sm text-center">{error}</p>}
-              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold">
-                Enviar
+              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold" disabled={isLoading}>
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Enviando...</> : "Enviar"}
               </Button>
             </form>
           )}
@@ -152,7 +190,7 @@ const ForgotPassword = () => {
                 <p className="text-sm text-foreground">
                   {mode === "usuario"
                     ? "Se ha enviado su nombre de usuario al correo asociado."
-                    : "Se ha enviado un código de verificación al correo ingresado."}
+                    : "Se ha enviado un código de verificación de 6 dígitos al correo ingresado."}
                 </p>
                 <p className="text-xs text-muted-foreground">{email}</p>
               </div>
@@ -169,19 +207,20 @@ const ForgotPassword = () => {
           {step === "codigo" && (
             <form onSubmit={handleVerificarCodigo} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="codigo" className="text-foreground">Código de Verificación</Label>
+                <Label htmlFor="codigo" className="text-foreground">Código de Verificación (6 dígitos)</Label>
                 <Input
                   id="codigo"
                   value={codigo}
                   onChange={(e) => setCodigo(e.target.value)}
-                  placeholder="Ingrese el código"
-                  className="bbg-secondary border-border text-foreground placeholder:text-muted-foreground"
-                  maxLength={4}
+                  placeholder="Ingrese el código de 6 dígitos"
+                  className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                  maxLength={6}
+                  disabled={isLoading}
                 />
               </div>
               {error && <p className="text-destructive text-sm text-center">{error}</p>}
-              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold">
-                Verificar Código
+              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold" disabled={isLoading}>
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Verificando...</> : "Verificar Código"}
               </Button>
             </form>
           )}
@@ -190,7 +229,7 @@ const ForgotPassword = () => {
           {step === "nueva-clave" && (
             <form onSubmit={handleCambiarClave} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="nueva-clave" className="text-foreground">Nueva Clave</Label>
+                <Label htmlFor="nueva-clave" className="text-foreground">Nueva Clave (mínimo 8 caracteres)</Label>
                 <Input
                   id="nueva-clave"
                   type="password"
@@ -198,6 +237,7 @@ const ForgotPassword = () => {
                   onChange={(e) => setNuevaClave(e.target.value)}
                   placeholder="Ingrese su nueva clave"
                   className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -209,11 +249,12 @@ const ForgotPassword = () => {
                   onChange={(e) => setConfirmarClave(e.target.value)}
                   placeholder="Confirme su nueva clave"
                   className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                  disabled={isLoading}
                 />
               </div>
               {error && <p className="text-destructive text-sm text-center">{error}</p>}
-              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold">
-                Cambiar Clave
+              <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold" disabled={isLoading}>
+                {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cambiando...</> : "Cambiar Clave"}
               </Button>
             </form>
           )}

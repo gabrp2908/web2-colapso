@@ -1,27 +1,36 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import URULogo from "@/components/URULogo";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Loader2 } from "lucide-react";
 
 const Login = () => {
-  const [user, setUser] = useState("");
-  const [clave, setClave] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
     try {
-      login(user, clave);
+      await login(identifier, password);
       navigate("/dashboard");
-    } catch {
-      setError("Credenciales inválidas. Intente de nuevo.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.alerts?.join(", ") || err.message);
+      } else {
+        setError("Error de conexión. Intente de nuevo.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -50,25 +59,27 @@ const Login = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="user" className="text-foreground">Usuario o Correo Electrónico</Label>
+              <Label htmlFor="identifier" className="text-foreground">Usuario o Correo Electrónico</Label>
               <Input
-                id="user"
-                value={user}
-                onChange={(e) => setUser(e.target.value)}
+                id="identifier"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="Ingrese su usuario o correo"
                 className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                disabled={isLoading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="clave" className="text-foreground">Clave</Label>
+              <Label htmlFor="password" className="text-foreground">Clave</Label>
               <Input
-                id="clave"
+                id="password"
                 type="password"
-                value={clave}
-                onChange={(e) => setClave(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Ingrese su clave"
                 className="bg-secondary border-border text-foreground placeholder:text-muted-foreground"
+                disabled={isLoading}
               />
             </div>
 
@@ -76,8 +87,12 @@ const Login = () => {
               <p className="text-destructive text-sm text-center">{error}</p>
             )}
 
-            <Button type="submit" className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold">
-              Entrar
+            <Button
+              type="submit"
+              className="w-full bg-primary hover:bg-accent text-primary-foreground font-semibold"
+              disabled={isLoading}
+            >
+              {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Entrando...</> : "Entrar"}
             </Button>
           </form>
 

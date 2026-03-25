@@ -5,50 +5,52 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Search, Filter, Download } from "lucide-react";
+import { Search, Filter, Download, Loader2, AlertCircle } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-
-interface ComponenteInventario {
-  codigo: string;
-  nombre: string;
-  cantidad: number;
-  ubicacion: string;
-  estado: "disponible" | "prestado" | "mantenimiento" | "agotado";
-}
-
-const mockInventario: ComponenteInventario[] = [
-  { codigo: "RES-001", nombre: "Resistencia 1kΩ", cantidad: 150, ubicacion: "Estante A-1", estado: "disponible" },
-  { codigo: "CAP-002", nombre: "Capacitor 100µF", cantidad: 80, ubicacion: "Estante A-2", estado: "disponible" },
-  { codigo: "LED-003", nombre: "LED Rojo 5mm", cantidad: 200, ubicacion: "Estante B-1", estado: "disponible" },
-  { codigo: "TRA-004", nombre: "Transistor 2N2222", cantidad: 0, ubicacion: "Estante B-3", estado: "agotado" },
-  { codigo: "PRO-005", nombre: "Protoboard 830 puntos", cantidad: 5, ubicacion: "Gabinete C-1", estado: "prestado" },
-  { codigo: "MUL-006", nombre: "Multímetro Digital", cantidad: 10, ubicacion: "Gabinete D-1", estado: "disponible" },
-  { codigo: "OSC-007", nombre: "Osciloscopio Rigol", cantidad: 2, ubicacion: "Mesa Central", estado: "mantenimiento" },
-  { codigo: "CAB-008", nombre: "Cable Jumper M-M", cantidad: 300, ubicacion: "Estante A-3", estado: "disponible" },
-  { codigo: "FUE-009", nombre: "Fuente de Poder 12V", cantidad: 8, ubicacion: "Gabinete D-2", estado: "prestado" },
-  { codigo: "ARD-010", nombre: "Arduino UNO R3", cantidad: 15, ubicacion: "Gabinete C-2", estado: "disponible" },
-];
-
-const estadoBadge: Record<ComponenteInventario["estado"], string> = {
-  disponible: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  prestado: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  mantenimiento: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  agotado: "bg-red-500/20 text-red-400 border-red-500/30",
-};
+import { useInventoryList } from "@/hooks/useInventory";
 
 const InventarioModule = () => {
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<string>("todos");
 
-  const filtered = mockInventario.filter((item) => {
+  const { data, isLoading, isError, error } = useInventoryList();
+
+  const items: any[] = Array.isArray(data?.data) ? data.data : [];
+
+  const filtered = items.filter((item: any) => {
+    const nombre = item.item_na ?? item.nombre ?? "";
+    const codigo = item.item_cod ?? item.codigo ?? "";
     const matchSearch =
-      item.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      item.codigo.toLowerCase().includes(search.toLowerCase());
-    const matchEstado = filtroEstado === "todos" || item.estado === filtroEstado;
-    return matchSearch && matchEstado;
+      String(nombre).toLowerCase().includes(search.toLowerCase()) ||
+      String(codigo).toLowerCase().includes(search.toLowerCase());
+
+    if (filtroEstado === "todos") return matchSearch;
+
+    const qty = item.inventory_qt ?? item.cantidad ?? 0;
+    if (filtroEstado === "disponible") return matchSearch && qty > 0;
+    if (filtroEstado === "agotado") return matchSearch && qty === 0;
+    return matchSearch;
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+        <span className="text-muted-foreground">Cargando inventario...</span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center py-12 text-destructive">
+        <AlertCircle className="w-5 h-5 mr-2" />
+        <span>{(error as any)?.message ?? "Error al cargar el inventario"}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -77,8 +79,6 @@ const InventarioModule = () => {
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="disponible">Disponible</SelectItem>
-            <SelectItem value="prestado">Prestado</SelectItem>
-            <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
             <SelectItem value="agotado">Agotado</SelectItem>
           </SelectContent>
         </Select>
@@ -88,7 +88,7 @@ const InventarioModule = () => {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-border">
-              <TableHead>Código</TableHead>
+              <TableHead>ID</TableHead>
               <TableHead>Componente</TableHead>
               <TableHead className="text-center">Cantidad</TableHead>
               <TableHead>Ubicación</TableHead>
@@ -96,19 +96,27 @@ const InventarioModule = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((item) => (
-              <TableRow key={item.codigo} className="border-border">
-                <TableCell className="font-mono text-accent">{item.codigo}</TableCell>
-                <TableCell className="font-medium">{item.nombre}</TableCell>
-                <TableCell className="text-center">{item.cantidad}</TableCell>
-                <TableCell className="text-muted-foreground">{item.ubicacion}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant="outline" className={estadoBadge[item.estado]}>
-                    {item.estado.charAt(0).toUpperCase() + item.estado.slice(1)}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
+            {filtered.map((item: any) => {
+              const qty = item.inventory_qt ?? 0;
+              const estado = qty > 0 ? "disponible" : "agotado";
+              const estadoClass = qty > 0
+                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                : "bg-red-500/20 text-red-400 border-red-500/30";
+
+              return (
+                <TableRow key={item.inventory_id} className="border-border">
+                  <TableCell className="font-mono text-accent">{item.inventory_id}</TableCell>
+                  <TableCell className="font-medium">{item.item_na ?? "—"}</TableCell>
+                  <TableCell className="text-center">{qty}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.location_na ?? item.location_id ?? "—"}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className={estadoClass}>
+                      {estado.charAt(0).toUpperCase() + estado.slice(1)}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
@@ -121,7 +129,7 @@ const InventarioModule = () => {
       </div>
 
       <p className="text-xs text-muted-foreground text-right">
-        Mostrando {filtered.length} de {mockInventario.length} componentes
+        Mostrando {filtered.length} de {items.length} componentes
       </p>
     </div>
   );

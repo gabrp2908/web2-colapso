@@ -6,77 +6,55 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Search, Plus, Edit, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Users, Search, Plus, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import BackButton from "@/components/BackButton";
-
-interface Usuario {
-  id: string;
-  username: string;
-  nombre: string;
-  email: string;
-  estado: "activo" | "inactivo" | "bloqueado";
-  ultimoAcceso: string;
-}
-
-const mockUsuarios: Usuario[] = [
-  { id: "U001", username: "cgarcia", nombre: "Carlos García", email: "cgarcia@uru.edu", estado: "activo", ultimoAcceso: "2025-03-15 08:30" },
-  { id: "U002", username: "mlopez", nombre: "María López", email: "mlopez@uru.edu", estado: "activo", ultimoAcceso: "2025-03-14 14:20" },
-  { id: "U003", username: "amartinez", nombre: "Ana Martínez", email: "amartinez@uru.edu", estado: "inactivo", ultimoAcceso: "2025-02-28 09:15" },
-  { id: "U004", username: "lrodriguez", nombre: "Luis Rodríguez", email: "lrodriguez@uru.edu", estado: "activo", ultimoAcceso: "2025-03-15 10:45" },
-  { id: "U005", username: "pramirez", nombre: "Pedro Ramírez", email: "pramirez@uru.edu", estado: "bloqueado", ultimoAcceso: "2025-03-01 16:00" },
-];
-
-const estadoConfig: Record<string, { label: string; className: string }> = {
-  activo: { label: "Activo", className: "bg-emerald-600 hover:bg-emerald-700" },
-  inactivo: { label: "Inactivo", className: "bg-secondary text-secondary-foreground" },
-  bloqueado: { label: "Bloqueado", className: "bg-destructive hover:bg-destructive/90" },
-};
+import { useUserList, useCreateUser, useUpdateUser, useDeleteUser } from "@/hooks/useSecurity";
 
 const UsuariosModule = ({ onBack }: { onBack: () => void }) => {
-  const [usuarios, setUsuarios] = useState(mockUsuarios);
   const [busqueda, setBusqueda] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editUser, setEditUser] = useState<Usuario | null>(null);
-  const [form, setForm] = useState({ username: "", nombre: "", email: "", estado: "activo" });
+  const [editUser, setEditUser] = useState<any>(null);
+  const [form, setForm] = useState({ email: "", password: "", user_na: "" });
 
-  const filtered = usuarios.filter((u) =>
-    u.nombre.toLowerCase().includes(busqueda.toLowerCase()) || u.username.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const { data, isLoading, isError, error } = useUserList();
+  const createMut = useCreateUser();
+  const updateMut = useUpdateUser();
+  const deleteMut = useDeleteUser();
 
-  const openNew = () => {
-    setEditUser(null);
-    setForm({ username: "", nombre: "", email: "", estado: "activo" });
-    setDialogOpen(true);
-  };
+  const usuarios: any[] = Array.isArray(data?.data) ? data.data : [];
 
-  const openEdit = (u: Usuario) => {
-    setEditUser(u);
-    setForm({ username: u.username, nombre: u.nombre, email: u.email, estado: u.estado });
-    setDialogOpen(true);
-  };
+  const filtered = usuarios.filter((u: any) => {
+    const name = u.user_na ?? u.email ?? "";
+    return name.toLowerCase().includes(busqueda.toLowerCase()) || (u.email ?? "").toLowerCase().includes(busqueda.toLowerCase());
+  });
 
-  const handleSave = () => {
-    if (!form.username || !form.nombre || !form.email) {
-      toast({ title: "Error", description: "Complete todos los campos.", variant: "destructive" });
-      return;
+  const openNew = () => { setEditUser(null); setForm({ email: "", password: "", user_na: "" }); setDialogOpen(true); };
+  const openEdit = (u: any) => { setEditUser(u); setForm({ email: u.email ?? "", password: "", user_na: u.user_na ?? "" }); setDialogOpen(true); };
+
+  const handleSave = async () => {
+    try {
+      if (editUser) {
+        await updateMut.mutateAsync({ user_id: editUser.user_id, email: form.email, user_na: form.user_na });
+        toast({ title: "Usuario actualizado" });
+      } else {
+        if (!form.email || !form.password) { toast({ title: "Error", description: "Email y clave son requeridos", variant: "destructive" }); return; }
+        await createMut.mutateAsync({ email: form.email, password: form.password, user_na: form.user_na });
+        toast({ title: "Usuario creado" });
+      }
+      setDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message ?? "Error al guardar", variant: "destructive" });
     }
-    if (editUser) {
-      setUsuarios((prev) => prev.map((u) => u.id === editUser.id ? { ...u, ...form, estado: form.estado as Usuario["estado"] } : u));
-      toast({ title: "Usuario actualizado", description: `${form.nombre} actualizado correctamente.` });
-    } else {
-      const nuevo: Usuario = { id: `U${String(usuarios.length + 1).padStart(3, "0")}`, ...form, estado: form.estado as Usuario["estado"], ultimoAcceso: "—" };
-      setUsuarios((prev) => [...prev, nuevo]);
-      toast({ title: "Usuario creado", description: `${form.nombre} registrado correctamente.` });
-    }
-    setDialogOpen(false);
   };
 
-  const handleDelete = (u: Usuario) => {
-    setUsuarios((prev) => prev.filter((x) => x.id !== u.id));
-    toast({ title: "Usuario eliminado", description: `${u.nombre} eliminado del sistema.` });
+  const handleDelete = async (u: any) => {
+    try { await deleteMut.mutateAsync(u.user_id); toast({ title: "Usuario eliminado" }); }
+    catch (err: any) { toast({ title: "Error", description: err?.message ?? "Error al eliminar", variant: "destructive" }); }
   };
+
+  if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary mr-2" /><span className="text-muted-foreground">Cargando usuarios...</span></div>;
+  if (isError) return <div className="flex items-center justify-center py-12 text-destructive"><AlertCircle className="w-5 h-5 mr-2" /><span>{(error as any)?.message ?? "Error al cargar usuarios"}</span></div>;
 
   return (
     <div className="space-y-6">
@@ -90,9 +68,7 @@ const UsuariosModule = ({ onBack }: { onBack: () => void }) => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-4 flex items-center gap-3"><CheckCircle className="w-6 h-6 text-emerald-500" /><div><p className="text-2xl font-bold text-foreground">{usuarios.filter(u => u.estado === "activo").length}</p><p className="text-xs text-muted-foreground">Activos</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><XCircle className="w-6 h-6 text-muted-foreground" /><div><p className="text-2xl font-bold text-foreground">{usuarios.filter(u => u.estado === "inactivo").length}</p><p className="text-xs text-muted-foreground">Inactivos</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><XCircle className="w-6 h-6 text-destructive" /><div><p className="text-2xl font-bold text-foreground">{usuarios.filter(u => u.estado === "bloqueado").length}</p><p className="text-xs text-muted-foreground">Bloqueados</p></div></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total Usuarios</p><p className="text-2xl font-bold text-foreground">{usuarios.length}</p></CardContent></Card>
       </div>
 
       <div className="relative max-w-sm">
@@ -107,29 +83,23 @@ const UsuariosModule = ({ onBack }: { onBack: () => void }) => {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Username</TableHead>
-                <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Último Acceso</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-mono text-xs">{u.id}</TableCell>
-                  <TableCell className="font-medium">{u.username}</TableCell>
-                  <TableCell>{u.nombre}</TableCell>
+              {filtered.map((u: any) => (
+                <TableRow key={u.user_id}>
+                  <TableCell className="font-mono text-xs">{u.user_id}</TableCell>
+                  <TableCell className="font-medium">{u.user_na ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell><Badge className={estadoConfig[u.estado].className}>{estadoConfig[u.estado].label}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{u.ultimoAcceso}</TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Edit className="w-4 h-4" /></Button>
                     <Button size="icon" variant="ghost" onClick={() => handleDelete(u)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No se encontraron usuarios</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No se encontraron usuarios</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -139,24 +109,13 @@ const UsuariosModule = ({ onBack }: { onBack: () => void }) => {
         <DialogContent>
           <DialogHeader><DialogTitle>{editUser ? "Editar Usuario" : "Nuevo Usuario"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2"><Label>Username</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Nombre completo</Label><Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Username</Label><Input value={form.user_na} onChange={(e) => setForm({ ...form, user_na: e.target.value })} /></div>
             <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <div className="space-y-2">
-              <Label>Estado</Label>
-              <Select value={form.estado} onValueChange={(v) => setForm({ ...form, estado: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="activo">Activo</SelectItem>
-                  <SelectItem value="inactivo">Inactivo</SelectItem>
-                  <SelectItem value="bloqueado">Bloqueado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!editUser && <div className="space-y-2"><Label>Clave</Label><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>Guardar</Button>
+            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>Guardar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

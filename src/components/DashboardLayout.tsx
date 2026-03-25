@@ -1,9 +1,13 @@
-import { ReactNode, useState } from "react";
-import { useAuth, UserRole } from "@/contexts/AuthContext";
+import { ReactNode, useState, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import type { MenuStructure, SecuritySubsystem, SecurityMenu } from "@/lib/api/types";
 import URULogo from "./URULogo";
 import NotificationsPanel from "./NotificationsPanel";
 import BackButton from "./BackButton";
+import ThemeToggle from "./ThemeToggle";
+
+// ── Module imports ──────────────────────────────────
 import InventarioModule from "./modules/InventarioModule";
 import SolicitudesModule from "./modules/SolicitudesModule";
 import SolvenciaModule from "./modules/SolvenciaModule";
@@ -21,7 +25,7 @@ import NotificacionesAdminModule from "./modules/negocio/NotificacionesAdminModu
 import ReportesAdminModule from "./modules/negocio/ReportesAdminModule";
 import UsuariosModule from "./modules/seguridad/UsuariosModule";
 import PersonasModule from "./modules/seguridad/PersonasModule";
-import GruposModule from "./modules/seguridad/GruposModule";
+
 import PerfilModule from "./modules/seguridad/PerfilModule";
 import SubsistemaModule from "./modules/seguridad/SubsistemaModule";
 import ObjetosModule from "./modules/seguridad/ObjetosModule";
@@ -29,12 +33,12 @@ import MetodosModule from "./modules/seguridad/MetodosModule";
 import PermisosModModule from "./modules/seguridad/PermisosModModule";
 import NotificacionModule from "./modules/seguridad/NotificacionModule";
 import CalendarioModule from "./modules/seguridad/CalendarioModule";
-import ThemeToggle from "./ThemeToggle";
+
 import {
   User, LogOut, ChevronRight, Menu, X,
   FileText, HandCoins, ShieldCheck, PackageSearch, MapPin, BarChart3,
   Send, Settings, Building2, Users, UserCircle, Key, Blocks,
-  Box, Waypoints, CalendarDays, Lock, Bell, Wrench, ClipboardList
+  Box, Waypoints, CalendarDays, Lock, Bell, Wrench, ClipboardList, Loader2, LayoutGrid
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
@@ -42,71 +46,237 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger
 } from "./ui/dropdown-menu";
 
-interface MenuItem {
-  label: string;
-  icon: ReactNode;
-  key: string;
-}
+// ── Mapeo módulo → componente (key normalizado) ─────
 
-const menusByRole: Record<UserRole, MenuItem[]> = {
-  usuario: [
-    { label: "Solicitudes", icon: <FileText className="w-5 h-5" />, key: "solicitudes" },
-    { label: "Préstamos", icon: <HandCoins className="w-5 h-5" />, key: "prestamos" },
-    { label: "Solvencia", icon: <ShieldCheck className="w-5 h-5" />, key: "solvencia" },
-  ],
-  supervisor: [
-    { label: "Préstamos", icon: <HandCoins className="w-5 h-5" />, key: "prestamos" },
-    { label: "Devoluciones", icon: <PackageSearch className="w-5 h-5" />, key: "devoluciones" },
-    { label: "Inventario", icon: <Blocks className="w-5 h-5" />, key: "inventario" },
-    { label: "Ubicación", icon: <MapPin className="w-5 h-5" />, key: "ubicacion" },
-    { label: "Reportes", icon: <BarChart3 className="w-5 h-5" />, key: "reportes" },
-    { label: "Notificar", icon: <Send className="w-5 h-5" />, key: "notificar" },
-  ],
-  admin: [
-    { label: "Seguridad", icon: <Lock className="w-5 h-5" />, key: "seguridad" },
-    { label: "Negocio", icon: <Building2 className="w-5 h-5" />, key: "negocio" },
-    { label: "Asignar Permisos", icon: <Key className="w-5 h-5" />, key: "permisos" },
-  ],
+type ModuleRenderer = (onBack: () => void) => ReactNode;
+
+const moduleRegistry: Record<string, ModuleRenderer> = {
+  solicitudes: (b) => <><BackButton onClick={b} /><SolicitudesModule /></>,
+  prestamos: (b) => <><BackButton onClick={b} /><PrestamosModule /></>,
+  solvencia: (b) => <><BackButton onClick={b} /><SolvenciaModule /></>,
+  devoluciones: (b) => <><BackButton onClick={b} /><DevolucionesModule /></>,
+  inventario: (b) => <><BackButton onClick={b} /><InventarioModule /></>,
+  ubicacion: (b) => <><BackButton onClick={b} /><UbicacionModule /></>,
+  reportes: (b) => <><BackButton onClick={b} /><ReportesModule /></>,
+  notificar: (b) => <><BackButton onClick={b} /><NotificarModule /></>,
+  permisos: (b) => <><BackButton onClick={b} /><PermisosModule /></>,
+  mantenimiento: (b) => <><BackButton onClick={b} /><MantenimientoModule /></>,
+  auditoria: (b) => <><BackButton onClick={b} /><AuditoriaModule /></>,
+  prestamos_admin: (b) => <PrestamosAdminModule onBack={b} />,
+  devoluciones_admin: (b) => <DevolucionesAdminModule onBack={b} />,
+  notificaciones_admin: (b) => <NotificacionesAdminModule onBack={b} />,
+  reportes_admin: (b) => <ReportesAdminModule onBack={b} />,
+  usuarios: (b) => <UsuariosModule onBack={b} />,
+  personas: (b) => <PersonasModule onBack={b} />,
+
+  perfil: (b) => <PerfilModule onBack={b} />,
+  subsistema: (b) => <SubsistemaModule onBack={b} />,
+  objetos: (b) => <ObjetosModule onBack={b} />,
+  metodos: (b) => <MetodosModule onBack={b} />,
+  permisos_mod: (b) => <PermisosModModule onBack={b} />,
+  notificacion: (b) => <NotificacionModule onBack={b} />,
+  calendario: (b) => <CalendarioModule onBack={b} />,
 };
 
-const seguridadModules = [
-  { label: "Usuarios", icon: <Users className="w-8 h-8" />, key: "seg_usuarios" },
-  { label: "Personas", icon: <UserCircle className="w-8 h-8" />, key: "seg_personas" },
-  { label: "Grupos", icon: <Users className="w-8 h-8" />, key: "seg_grupos" },
-  { label: "Perfil", icon: <User className="w-8 h-8" />, key: "seg_perfil" },
-  { label: "Subsistema", icon: <Settings className="w-8 h-8" />, key: "seg_subsistema" },
-  { label: "Objetos", icon: <Box className="w-8 h-8" />, key: "seg_objetos" },
-  { label: "Métodos", icon: <Waypoints className="w-8 h-8" />, key: "seg_metodos" },
-  { label: "Permisos", icon: <Key className="w-8 h-8" />, key: "seg_permisos" },
-  { label: "Notificación", icon: <Bell className="w-8 h-8" />, key: "seg_notificacion" },
-  { label: "Calendario Académico", icon: <CalendarDays className="w-8 h-8" />, key: "seg_calendario" },
+/** Mapeo de nombre de opción/menú a key del registry */
+function resolveModuleKey(name: string): string {
+  const lower = name.toLowerCase().trim();
+  const aliasMap: Record<string, string> = {
+    "inventario": "inventario",
+    "inventory": "inventario",
+    "solicitudes": "solicitudes",
+    "requests": "solicitudes",
+    "préstamos": "prestamos",
+    "prestamos": "prestamos",
+    "loans": "prestamos",
+    "solvencia": "solvencia",
+    "devoluciones": "devoluciones",
+    "devolutions": "devoluciones",
+    "ubicación": "ubicacion",
+    "ubicacion": "ubicacion",
+    "location": "ubicacion",
+    "reportes": "reportes",
+    "reports": "reportes",
+    "notificar": "notificar",
+    "notify": "notificar",
+    "permisos": "permisos",
+    "permissions": "permisos",
+    "mantenimiento": "mantenimiento",
+    "maintenance": "mantenimiento",
+    "auditoría": "auditoria",
+    "auditoria": "auditoria",
+    "audit": "auditoria",
+    "usuarios": "usuarios",
+    "users": "usuarios",
+    "personas": "personas",
+    "persons": "personas",
+    "grupos": "grupos",
+    "groups": "grupos",
+    "perfil": "perfil",
+    "profile": "perfil",
+    "subsistema": "subsistema",
+    "subsystem": "subsistema",
+    "objetos": "objetos",
+    "objects": "objetos",
+    "métodos": "metodos",
+    "metodos": "metodos",
+    "methods": "metodos",
+    "calendario": "calendario",
+    "calendar": "calendario",
+    "calendario académico": "calendario",
+    "notificación": "notificacion",
+    "notificacion": "notificacion",
+    "notification": "notificacion",
+  };
+  return aliasMap[lower] ?? lower.replace(/\s+/g, "_");
+}
+
+/** Mapeo de nombre a icono */
+const iconMap: Record<string, ReactNode> = {
+  solicitudes: <FileText className="w-5 h-5" />,
+  prestamos: <HandCoins className="w-5 h-5" />,
+  solvencia: <ShieldCheck className="w-5 h-5" />,
+  devoluciones: <PackageSearch className="w-5 h-5" />,
+  inventario: <Blocks className="w-5 h-5" />,
+  ubicacion: <MapPin className="w-5 h-5" />,
+  reportes: <BarChart3 className="w-5 h-5" />,
+  notificar: <Send className="w-5 h-5" />,
+  permisos: <Key className="w-5 h-5" />,
+  mantenimiento: <Wrench className="w-5 h-5" />,
+  auditoria: <ClipboardList className="w-5 h-5" />,
+  usuarios: <Users className="w-5 h-5" />,
+  personas: <UserCircle className="w-5 h-5" />,
+  grupos: <Users className="w-5 h-5" />,
+  perfil: <User className="w-5 h-5" />,
+  subsistema: <Settings className="w-5 h-5" />,
+  objetos: <Box className="w-5 h-5" />,
+  metodos: <Waypoints className="w-5 h-5" />,
+  permisos_mod: <Key className="w-5 h-5" />,
+  notificacion: <Bell className="w-5 h-5" />,
+  calendario: <CalendarDays className="w-5 h-5" />,
+  prestamos_admin: <HandCoins className="w-5 h-5" />,
+  devoluciones_admin: <PackageSearch className="w-5 h-5" />,
+  notificaciones_admin: <Bell className="w-5 h-5" />,
+  reportes_admin: <BarChart3 className="w-5 h-5" />,
+};
+
+const subsystemIconMap: Record<string, ReactNode> = {
+  seguridad: <Lock className="w-5 h-5" />,
+  security: <Lock className="w-5 h-5" />,
+  negocio: <Building2 className="w-5 h-5" />,
+  business: <Building2 className="w-5 h-5" />,
+};
+
+function getIcon(key: string): ReactNode {
+  return iconMap[key] ?? subsystemIconMap[key.toLowerCase()] ?? <LayoutGrid className="w-5 h-5" />;
+}
+
+function getSubsystemIcon(name: string): ReactNode {
+  const key = name.toLowerCase().trim();
+  return subsystemIconMap[key] ?? <LayoutGrid className="w-5 h-5" />;
+}
+
+// ── Fallback (cuando el backend no tiene navegación configurada) ─────
+
+interface FallbackItem { label: string; key: string; }
+
+const fallbackItems: FallbackItem[] = [
+  { label: "Solicitudes", key: "solicitudes" },
+  { label: "Préstamos", key: "prestamos" },
+  { label: "Solvencia", key: "solvencia" },
+  { label: "Devoluciones", key: "devoluciones" },
+  { label: "Inventario", key: "inventario" },
+  { label: "Ubicación", key: "ubicacion" },
+  { label: "Reportes", key: "reportes" },
+  { label: "Notificar", key: "notificar" },
+  { label: "Permisos", key: "permisos" },
 ];
 
-const negocioModules = [
-  { label: "Mantenimiento", icon: <Wrench className="w-8 h-8" />, key: "mantenimiento" },
-  { label: "Préstamos", icon: <HandCoins className="w-8 h-8" />, key: "prestamos_admin" },
-  { label: "Devoluciones", icon: <PackageSearch className="w-8 h-8" />, key: "devoluciones_admin" },
-  { label: "Notificaciones", icon: <Bell className="w-8 h-8" />, key: "notificaciones_admin" },
-  { label: "Reportes", icon: <BarChart3 className="w-8 h-8" />, key: "reportes_admin" },
-  { label: "Auditoría", icon: <ClipboardList className="w-8 h-8" />, key: "auditoria" },
-];
+// ── Tipo de vista ───────────────────────────────────
+
+type ViewState =
+  | { type: "home" }
+  | { type: "subsystem"; subsystemId: number }
+  | { type: "module"; moduleKey: string; parentSubsystemId?: number };
+
+// ── DashboardLayout ─────────────────────────────────
 
 const DashboardLayout = ({ children }: { children?: ReactNode }) => {
-  const { user, logout } = useAuth();
+  const { user, navigation, loading, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeItem, setActiveItem] = useState<string>("");
+  const [view, setView] = useState<ViewState>({ type: "home" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const hasDynamicNav = navigation.length > 0;
+
+  /** Sidebar items derivados de la navegación dinámica o fallback */
+  const sidebarItems = useMemo(() => {
+    if (!hasDynamicNav) {
+      return fallbackItems.map((f) => ({ label: f.label, key: f.key, icon: getIcon(f.key) }));
+    }
+
+    // Subsistemas con un solo menú y pocas opciones → mostrar menús directamente
+    // Subsistemas con múltiples menús → mostrar como grupo expandible
+    const items: { label: string; key: string; icon: ReactNode; subsystemId?: number }[] = [];
+
+    for (const sub of navigation) {
+      const menus = sub.menus ?? [];
+      if (menus.length === 0) continue;
+
+      if (menus.length === 1 && (menus[0].options?.length ?? 0) <= 1) {
+        // Subsistema con 1 menú y 0-1 opciones → render plano
+        const key = resolveModuleKey(menus[0].menu_na);
+        items.push({ label: menus[0].menu_na, key, icon: getIcon(key) });
+      } else {
+        // Subsistema con múltiples menús → render como grupo
+        items.push({
+          label: sub.subsystem_na,
+          key: `subsystem_${sub.subsystem_id}`,
+          icon: getSubsystemIcon(sub.subsystem_na),
+          subsystemId: sub.subsystem_id,
+        });
+      }
+    }
+
+    return items;
+  }, [navigation, hasDynamicNav]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!user) {
     navigate("/login");
     return null;
   }
 
-  const menuItems = menusByRole[user.role];
-  const roleLabel = user.role === "usuario" ? "Usuario" : user.role === "supervisor" ? "Supervisor" : "Administrador";
+  const displayName = user.username || user.email || `User #${user.userId}`;
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try { await logout(); navigate("/login"); } catch { navigate("/login"); } finally { setIsLoggingOut(false); }
+  };
+
+  const handleSidebarClick = (item: { key: string; subsystemId?: number }) => {
+    if (item.subsystemId != null) {
+      setView({ type: "subsystem", subsystemId: item.subsystemId });
+    } else {
+      setView({ type: "module", moduleKey: item.key });
+    }
+  };
+
+  const goHome = () => setView({ type: "home" });
+
+  const activeKey = view.type === "module" ? view.moduleKey : view.type === "subsystem" ? `subsystem_${view.subsystemId}` : "";
 
   return (
     <div className="min-h-screen bg-transparent flex flex-col">
+      {/* Header */}
       <header className="bg-[rgb(27,67,152)] text-white dark:bg-card dark:text-foreground border-b border-border px-4 py-3 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-white dark:text-foreground hover:bg-white/10 dark:hover:bg-secondary">
@@ -123,14 +293,15 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card border-border">
               <div className="px-3 py-2">
-                <p className="font-semibold text-sm text-foreground">{user.nombre} {user.apellido}</p>
-                <p className="text-xs text-muted-foreground">{roleLabel}</p>
+                <p className="font-semibold text-sm text-foreground">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-foreground" onClick={() => setActiveItem("seg_perfil")}>Ver Perfil</DropdownMenuItem>
+              <DropdownMenuItem className="text-foreground" onClick={() => setView({ type: "module", moduleKey: "perfil" })}>Ver Perfil</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { logout(); navigate("/login"); }} className="text-destructive">
-                <LogOut className="w-4 h-4 mr-2" />Cerrar Sesión
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive" disabled={isLoggingOut}>
+                {isLoggingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogOut className="w-4 h-4 mr-2" />}
+                Cerrar Sesión
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -138,14 +309,15 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
         <aside className={`bg-card border-r border-border transition-all duration-300 shrink-0 ${sidebarOpen ? "w-56" : "w-0 overflow-hidden"}`}>
           <nav className="p-3 space-y-1">
-            {menuItems.map((item) => (
+            {sidebarItems.map((item) => (
               <button
                 key={item.key}
-                onClick={() => setActiveItem(item.key)}
+                onClick={() => handleSidebarClick(item)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeItem === item.key ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary"
+                  activeKey === item.key ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary"
                 }`}
               >
                 {item.icon}
@@ -156,66 +328,76 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
           </nav>
         </aside>
 
+        {/* Main content */}
         <main className="flex-1 overflow-auto p-6">
-          {children || <DefaultContent role={user.role} activeItem={activeItem} onNavigate={setActiveItem} />}
+          {children || <MainContent view={view} navigation={navigation} hasDynamicNav={hasDynamicNav} sidebarItems={sidebarItems} onNavigate={setView} goHome={goHome} />}
         </main>
       </div>
     </div>
   );
 };
 
-const DefaultContent = ({ role, activeItem, onNavigate }: { role: UserRole; activeItem: string; onNavigate?: (key: string) => void }) => {
-  const goHome = () => onNavigate?.("");
-  const goSeguridad = () => onNavigate?.("seguridad");
-  const goNegocio = () => onNavigate?.("negocio");
+// ── Main Content Renderer ──────────────────────────
 
-  // === Usuario modules ===
-  if (activeItem === "solicitudes" && role === "usuario") return <><BackButton onClick={goHome} /><SolicitudesModule /></>;
-  if (activeItem === "prestamos" && role === "usuario") return <><BackButton onClick={goHome} /><PrestamosModule /></>;
-  if (activeItem === "solvencia" && role === "usuario") return <><BackButton onClick={goHome} /><SolvenciaModule /></>;
+interface MainContentProps {
+  view: ViewState;
+  navigation: MenuStructure;
+  hasDynamicNav: boolean;
+  sidebarItems: { label: string; key: string; icon: ReactNode }[];
+  onNavigate: (v: ViewState) => void;
+  goHome: () => void;
+}
 
-  // === Supervisor modules ===
-  if (activeItem === "prestamos" && role === "supervisor") return <><BackButton onClick={goHome} /><PrestamosModule /></>;
-  if (activeItem === "devoluciones" && role === "supervisor") return <><BackButton onClick={goHome} /><DevolucionesModule /></>;
-  if (activeItem === "inventario" && role === "supervisor") return <><BackButton onClick={goHome} /><InventarioModule /></>;
-  if (activeItem === "ubicacion" && role === "supervisor") return <><BackButton onClick={goHome} /><UbicacionModule /></>;
-  if (activeItem === "reportes" && role === "supervisor") return <><BackButton onClick={goHome} /><ReportesModule /></>;
-  if (activeItem === "notificar" && role === "supervisor") return <><BackButton onClick={goHome} /><NotificarModule /></>;
+const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate, goHome }: MainContentProps) => {
+  // Renderizar módulo específico
+  if (view.type === "module") {
+    const renderer = moduleRegistry[view.moduleKey];
+    const backTarget = view.parentSubsystemId != null
+      ? () => onNavigate({ type: "subsystem", subsystemId: view.parentSubsystemId! })
+      : goHome;
 
-  // === Admin: Asignar Permisos ===
-  if (role === "admin" && activeItem === "permisos") return <><BackButton onClick={goHome} /><PermisosModule /></>;
+    if (renderer) return <>{renderer(backTarget)}</>;
 
-  // === Admin: Seguridad sub-modules ===
-  if (role === "admin" && activeItem === "seg_usuarios") return <UsuariosModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_personas") return <PersonasModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_grupos") return <GruposModule onBack={goSeguridad} />;
-  if (activeItem === "seg_perfil") return <PerfilModule onBack={goHome} />;
-  if (role === "admin" && activeItem === "seg_subsistema") return <SubsistemaModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_objetos") return <ObjetosModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_metodos") return <MetodosModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_permisos") return <PermisosModModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_notificacion") return <NotificacionModule onBack={goSeguridad} />;
-  if (role === "admin" && activeItem === "seg_calendario") return <CalendarioModule onBack={goSeguridad} />;
+    return (
+      <div className="text-center py-12">
+        <BackButton onClick={backTarget} />
+        <p className="text-muted-foreground mt-4">Módulo &quot;{view.moduleKey}&quot; no implementado aún.</p>
+      </div>
+    );
+  }
 
-  // === Admin: Negocio sub-modules ===
-  if (role === "admin" && activeItem === "mantenimiento") return <><BackButton onClick={goNegocio} /><MantenimientoModule /></>;
-  if (role === "admin" && activeItem === "prestamos_admin") return <PrestamosAdminModule onBack={goNegocio} />;
-  if (role === "admin" && activeItem === "devoluciones_admin") return <DevolucionesAdminModule onBack={goNegocio} />;
-  if (role === "admin" && activeItem === "notificaciones_admin") return <NotificacionesAdminModule onBack={goNegocio} />;
-  if (role === "admin" && activeItem === "reportes_admin") return <ReportesAdminModule onBack={goNegocio} />;
-  if (role === "admin" && activeItem === "auditoria") return <><BackButton onClick={goNegocio} /><AuditoriaModule /></>;
+  // Renderizar subsistema (grid de menús/opciones)
+  if (view.type === "subsystem") {
+    const sub = navigation.find((s) => s.subsystem_id === view.subsystemId);
+    if (!sub) return <p className="text-muted-foreground">Subsistema no encontrado.</p>;
 
-  // === Admin: Seguridad grid ===
-  if (role === "admin" && activeItem === "seguridad") {
+    const allItems = (sub.menus ?? []).flatMap((menu) => {
+      // Si el menú tiene opciones, mostrar las opciones
+      if (menu.options && menu.options.length > 0) {
+        return menu.options.map((opt) => ({
+          label: opt.option_na,
+          key: resolveModuleKey(opt.option_na),
+        }));
+      }
+      // Si no tiene opciones, mostrar el menú como item
+      return [{ label: menu.menu_na, key: resolveModuleKey(menu.menu_na) }];
+    });
+
     return (
       <div>
         <BackButton onClick={goHome} />
-        <h2 className="text-xl font-bold text-foreground mb-6">Módulos de Seguridad</h2>
+        <h2 className="text-xl font-bold text-foreground mb-6">{sub.subsystem_na}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {seguridadModules.map((mod) => (
-            <button key={mod.key} onClick={() => onNavigate?.(mod.key)} className="bg-card hover:bg-secondary border border-border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:scale-105 hover:border-accent group">
-              <div className="text-accent group-hover:text-lab-blue-glow transition-colors">{mod.icon}</div>
-              <span className="text-sm font-medium text-foreground text-center">{mod.label}</span>
+          {allItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => onNavigate({ type: "module", moduleKey: item.key, parentSubsystemId: view.subsystemId })}
+              className="bg-card hover:bg-secondary border border-border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:scale-105 hover:border-accent group"
+            >
+              <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">
+                {getIcon(item.key)}
+              </div>
+              <span className="text-sm font-medium text-foreground text-center">{item.label}</span>
             </button>
           ))}
         </div>
@@ -223,34 +405,29 @@ const DefaultContent = ({ role, activeItem, onNavigate }: { role: UserRole; acti
     );
   }
 
-  // === Admin: Negocio grid ===
-  if (role === "admin" && activeItem === "negocio") {
-    return (
-      <div>
-        <BackButton onClick={goHome} />
-        <h2 className="text-xl font-bold text-foreground mb-6">Módulos de Negocio</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {negocioModules.map((mod) => (
-            <button key={mod.key} onClick={() => onNavigate?.(mod.key)} className="bg-card hover:bg-secondary border border-border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:scale-105 hover:border-accent group">
-              <div className="text-accent group-hover:text-lab-blue-glow transition-colors">{mod.icon}</div>
-              <span className="text-sm font-medium text-foreground text-center">{mod.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // === Home: module grid ===
-  const menuItems = menusByRole[role];
+  // Home: grid de todos los items del sidebar
   return (
     <div>
       <h2 className="text-xl font-bold text-foreground mb-2">Bienvenido al Sistema</h2>
-      <p className="text-sm text-muted-foreground mb-6">Seleccione un módulo para comenzar</p>
+      <p className="text-sm text-muted-foreground mb-6">
+        {hasDynamicNav ? "Navegación cargada desde el servidor" : "Seleccione un módulo para comenzar"}
+      </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {menuItems.map((item) => (
-          <button key={item.key} onClick={() => onNavigate?.(item.key)} className="bg-card hover:bg-secondary border border-border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:scale-105 hover:border-accent group">
-            <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">{item.icon}</div>
+        {sidebarItems.map((item) => (
+          <button
+            key={item.key}
+            onClick={() => {
+              if ((item as any).subsystemId != null) {
+                onNavigate({ type: "subsystem", subsystemId: (item as any).subsystemId });
+              } else {
+                onNavigate({ type: "module", moduleKey: item.key });
+              }
+            }}
+            className="bg-card hover:bg-secondary border border-border rounded-xl p-5 flex flex-col items-center gap-3 transition-all hover:scale-105 hover:border-accent group"
+          >
+            <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">
+              {item.icon}
+            </div>
             <span className="text-sm font-medium text-foreground text-center">{item.label}</span>
           </button>
         ))}
