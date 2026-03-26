@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { HandCoins, Search, Clock, AlertTriangle, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { useLoanList } from "@/hooks/useLoan";
+import { useAuth } from "@/contexts/AuthContext";
 
 const estadoBadge: Record<string, { className: string; label: string }> = {
   active: { className: "bg-primary/20 text-primary border-primary/30", label: "Activo" },
@@ -20,8 +21,11 @@ const getEstadoBadge = (status: string) => {
 const PrestamosModule = () => {
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState<string>("todos");
+  const { user } = useAuth();
 
-  const { data, isLoading, isError, error } = useLoanList();
+  const { data, isLoading, isError, error } = useLoanList(
+    user?.userId ? { user_id: user.userId } : undefined
+  );
 
   const loans: any[] = Array.isArray(data?.data) ? data.data : [];
 

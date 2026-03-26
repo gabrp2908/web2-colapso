@@ -65,12 +65,25 @@ const moduleRegistry: Record<string, ModuleRenderer> = {
 
 
   perfil: (b) => <PerfilModule onBack={b} />,
+  perfiles: (b) => <PerfilModule onBack={b} />,
   subsistema: (b) => <SubsistemaModule onBack={b} />,
+  subsistemas: (b) => <SubsistemaModule onBack={b} />,
   objetos: (b) => <ObjetosModule onBack={b} />,
   metodos: (b) => <MetodosModule onBack={b} />,
   notificacion: (b) => <NotificacionModule onBack={b} />,
   calendario: (b) => <CalendarioModule onBack={b} />,
 };
+
+function formatNavigationLabel(name: string): string {
+  const lower = name.toLowerCase().trim();
+
+  if (lower === "perfil") return "Perfiles";
+  if (lower === "perfiles") return "Perfiles";
+  if (lower === "subsistema") return "Subsistemas";
+  if (lower === "subsistemas") return "Subsistemas";
+
+  return name;
+}
 
 /** Mapeo de nombre de opción/menú a key del registry */
 function resolveModuleKey(name: string): string {
@@ -107,9 +120,13 @@ function resolveModuleKey(name: string): string {
     "grupos": "grupos",
     "groups": "grupos",
     "perfil": "perfil",
+    "perfiles": "perfil",
     "profile": "perfil",
+    "profiles": "perfil",
     "subsistema": "subsistema",
+    "subsistemas": "subsistema",
     "subsystem": "subsistema",
+    "subsystems": "subsistema",
     "objetos": "objetos",
     "objects": "objetos",
     "métodos": "metodos",
@@ -142,7 +159,9 @@ const iconMap: Record<string, ReactNode> = {
   personas: <UserCircle className="w-5 h-5" />,
   grupos: <Users className="w-5 h-5" />,
   perfil: <User className="w-5 h-5" />,
+  perfiles: <User className="w-5 h-5" />,
   subsistema: <Settings className="w-5 h-5" />,
+  subsistemas: <Settings className="w-5 h-5" />,
   objetos: <Box className="w-5 h-5" />,
   metodos: <Waypoints className="w-5 h-5" />,
   permisos_mod: <Key className="w-5 h-5" />,
@@ -221,6 +240,32 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
       return fallbackItems.map((f) => ({ label: f.label, key: f.key, icon: getIcon(f.key) }));
     }
 
+    if (navigation.length === 1) {
+      const onlySubsystem = navigation[0];
+      const flatItems: { label: string; key: string; icon: ReactNode; subsystemId?: number }[] = [];
+      const seen = new Set<string>();
+
+      for (const menu of onlySubsystem.menus ?? []) {
+        const hasOptions = (menu.options?.length ?? 0) > 0;
+        if (hasOptions) {
+          for (const option of menu.options ?? []) {
+            const key = resolveModuleKey(option.option_na);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            flatItems.push({ label: formatNavigationLabel(option.option_na), key, icon: getIcon(key) });
+          }
+          continue;
+        }
+
+        const key = resolveModuleKey(menu.menu_na);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        flatItems.push({ label: formatNavigationLabel(menu.menu_na), key, icon: getIcon(key) });
+      }
+
+      if (flatItems.length > 0) return flatItems;
+    }
+
     // Subsistemas con un solo menú y pocas opciones → mostrar menús directamente
     // Subsistemas con múltiples menús → mostrar como grupo expandible
     const items: { label: string; key: string; icon: ReactNode; subsystemId?: number }[] = [];
@@ -232,7 +277,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
       if (menus.length === 1 && (menus[0].options?.length ?? 0) <= 1) {
         // Subsistema con 1 menú y 0-1 opciones → render plano
         const key = resolveModuleKey(menus[0].menu_na);
-        items.push({ label: menus[0].menu_na, key, icon: getIcon(key) });
+        items.push({ label: formatNavigationLabel(menus[0].menu_na), key, icon: getIcon(key) });
       } else {
         // Subsistema con múltiples menús → render como grupo
         items.push({
@@ -421,7 +466,7 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
               <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">
                 {getIcon(item.key)}
               </div>
-              <span className="text-sm font-medium text-foreground text-center">{item.label}</span>
+              <span className="text-sm font-medium text-foreground text-center">{formatNavigationLabel(item.label)}</span>
             </button>
           ))}
         </div>
@@ -452,7 +497,7 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
             <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">
               {item.icon}
             </div>
-            <span className="text-sm font-medium text-foreground text-center">{item.label}</span>
+            <span className="text-sm font-medium text-foreground text-center">{formatNavigationLabel(item.label)}</span>
           </button>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { Bell, CheckCheck, Clock, Info, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useNotificationList } from "@/hooks/useSecurity";
+import { useAuth } from "@/contexts/AuthContext";
 
 
 interface Notificacion {
@@ -54,7 +55,10 @@ function mapType(value?: string | null): Notificacion["tipo"] {
 const NotificationsPanel = () => {
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [mostrarTodas, setMostrarTodas] = useState(false);
-  const { data: notificationsResponse } = useNotificationList();
+  const { user } = useAuth();
+  const { data: notificationsResponse } = useNotificationList(
+    user?.userId ? { user_id: user.userId } : undefined
+  );
 
   const notificaciones: Notificacion[] = useMemo(() => {
     const rows = ((notificationsResponse?.data as NotificationRow[] | undefined) ?? []);

@@ -36,7 +36,9 @@ const SolicitudesModule = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: reqData, isLoading: reqLoading, isError: reqIsError, error: reqError } = useRequestList();
+  const { data: reqData, isLoading: reqLoading, isError: reqIsError, error: reqError } = useRequestList(
+    user?.userId ? { user_id: user.userId } : undefined
+  );
   const { data: invData, isLoading: invLoading } = useInventoryList();
   const { data: catData, isLoading: catLoading } = useCategoryList();
   const createRequest = useCreateRequest();
@@ -125,7 +127,7 @@ const SolicitudesModule = () => {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-2"><Plus className="w-4 h-4" /> Nueva Solicitud</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-6xl min-h-[80vh] flex flex-col bg-card border-border p-0 overflow-hidden">
+          <DialogContent className="w-[95vw] max-w-6xl h-[85vh] max-h-[85vh] flex flex-col bg-card border-border p-0 overflow-hidden">
             <DialogHeader className="px-6 py-4 border-b border-border bg-muted/30">
               <DialogTitle className="flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" /> Crear Requisición de Inventario</DialogTitle>
             </DialogHeader>

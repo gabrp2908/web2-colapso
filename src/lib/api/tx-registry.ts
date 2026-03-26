@@ -37,127 +37,131 @@ export const TX = {
   DEV_CREATE: 22,
   DEV_UPDATE: 23,
   DEV_DELETE: 24,
+  DEV_REGISTER_DEVOLUTION: 25,
+  DEV_GET_ALL_DEVOLUTIONS: 26,
+  DEV_GET_USER_DEVOLUTION: 27,
+  DEV_GET_DEVOLUTION: 28,
 
-  // ── Equipment (25-29) ────────────────────────────
-  EQUIP_GET: 25,
-  EQUIP_GET_ALL: 26,
-  EQUIP_CREATE: 27,
-  EQUIP_UPDATE: 28,
-  EQUIP_DELETE: 29,
+  // ── Equipment (29-33) ────────────────────────────
+  EQUIP_GET: 29,
+  EQUIP_GET_ALL: 30,
+  EQUIP_CREATE: 31,
+  EQUIP_UPDATE: 32,
+  EQUIP_DELETE: 33,
 
-  // ── Inventory (30-37) ────────────────────────────
-  INV_GET: 30,
-  INV_GET_ALL: 31,
-  INV_CREATE: 32,
-  INV_UPDATE: 33,
-  INV_DELETE: 34,
-  INV_ADD_STOCK: 35,
-  INV_REMOVE_STOCK: 36,
-  INV_MOVE_LOCATION: 37,
+  // ── Inventory (34-41) ────────────────────────────
+  INV_GET: 34,
+  INV_GET_ALL: 35,
+  INV_CREATE: 36,
+  INV_UPDATE: 37,
+  INV_DELETE: 38,
+  INV_ADD_STOCK: 39,
+  INV_REMOVE_STOCK: 40,
+  INV_MOVE_LOCATION: 41,
 
-  // ── Lapse (38-42) ────────────────────────────────
-  LAPSE_GET: 38,
-  LAPSE_GET_ALL: 39,
-  LAPSE_CREATE: 40,
-  LAPSE_UPDATE: 41,
-  LAPSE_DELETE: 42,
+  // ── Lapse (42-46) ────────────────────────────────
+  LAPSE_GET: 42,
+  LAPSE_GET_ALL: 43,
+  LAPSE_CREATE: 44,
+  LAPSE_UPDATE: 45,
+  LAPSE_DELETE: 46,
 
-  // ── Loan (43-50) ─────────────────────────────────
-  LOAN_GET_REQUEST: 43,
-  LOAN_GET_ALL_REQUESTS: 44,
-  LOAN_REQUEST: 45,
-  LOAN_ACCEPT_REQUEST: 46,
-  LOAN_REJECT_REQUEST: 47,
-  LOAN_GET: 48,
-  LOAN_GET_ALL: 49,
-  LOAN_REGISTER: 50,
+  // ── Loan (47-54) ─────────────────────────────────
+  LOAN_GET_REQUEST: 47,
+  LOAN_GET_ALL_REQUESTS: 48,
+  LOAN_REQUEST: 49,
+  LOAN_ACCEPT_REQUEST: 50,
+  LOAN_REJECT_REQUEST: 51,
+  LOAN_GET: 52,
+  LOAN_GET_ALL: 53,
+  LOAN_REGISTER: 54,
 
-  // ── Location (51-55) ─────────────────────────────
-  LOC_GET_ALL: 51,
-  LOC_CREATE: 52,
-  LOC_UPDATE: 53,
-  LOC_DELETE: 54,
-  LOC_GET: 55,
+  // ── Location (55-59) ─────────────────────────────
+  LOC_GET_ALL: 55,
+  LOC_CREATE: 56,
+  LOC_UPDATE: 57,
+  LOC_DELETE: 58,
+  LOC_GET: 59,
 
-  // ── Menu (56-60) ─────────────────────────────────
-  MENU_GET: 56,
-  MENU_GET_ALL: 57,
-  MENU_CREATE: 58,
-  MENU_UPDATE: 59,
-  MENU_DELETE: 60,
+  // ── Menu (60-64) ─────────────────────────────────
+  MENU_GET: 60,
+  MENU_GET_ALL: 61,
+  MENU_CREATE: 62,
+  MENU_UPDATE: 63,
+  MENU_DELETE: 64,
 
-  // ── Method (61-65) ───────────────────────────────
-  METHOD_GET: 61,
-  METHOD_GET_ALL: 62,
-  METHOD_CREATE: 63,
-  METHOD_UPDATE: 64,
-  METHOD_DELETE: 65,
+  // ── Method (65-69) ───────────────────────────────
+  METHOD_GET: 65,
+  METHOD_GET_ALL: 66,
+  METHOD_CREATE: 67,
+  METHOD_UPDATE: 68,
+  METHOD_DELETE: 69,
 
-  // ── Notification (66-70) ─────────────────────────
-  NOTIF_GET: 66,
-  NOTIF_GET_ALL: 67,
-  NOTIF_CREATE: 68,
-  NOTIF_UPDATE: 69,
-  NOTIF_DELETE: 70,
+  // ── Notification (70-74) ─────────────────────────
+  NOTIF_GET: 70,
+  NOTIF_GET_ALL: 71,
+  NOTIF_CREATE: 72,
+  NOTIF_UPDATE: 73,
+  NOTIF_DELETE: 74,
 
-  // ── Object (71-75) ───────────────────────────────
-  OBJ_GET: 71,
-  OBJ_GET_ALL: 72,
-  OBJ_CREATE: 73,
-  OBJ_UPDATE: 74,
-  OBJ_DELETE: 75,
+  // ── Object (75-79) ───────────────────────────────
+  OBJ_GET: 75,
+  OBJ_GET_ALL: 76,
+  OBJ_CREATE: 77,
+  OBJ_UPDATE: 78,
+  OBJ_DELETE: 79,
 
-  // ── Option (76-80) ───────────────────────────────
-  OPT_GET: 76,
-  OPT_GET_ALL: 77,
-  OPT_CREATE: 78,
-  OPT_UPDATE: 79,
-  OPT_DELETE: 80,
+  // ── Option (80-84) ───────────────────────────────
+  OPT_GET: 80,
+  OPT_GET_ALL: 81,
+  OPT_CREATE: 82,
+  OPT_UPDATE: 83,
+  OPT_DELETE: 84,
 
-  // ── Profile (81-93) ──────────────────────────────
-  PROF_GET: 81,
-  PROF_GET_ALL: 82,
-  PROF_CREATE: 83,
-  PROF_UPDATE: 84,
-  PROF_DELETE: 85,
-  PROF_GRANT_PERM: 86,
-  PROF_REVOKE_PERM: 87,
-  PROF_ASSIGN_SUBSYSTEM: 88,
-  PROF_REVOKE_SUBSYSTEM: 89,
-  PROF_ASSIGN_MENU: 90,
-  PROF_REVOKE_MENU: 91,
-  PROF_ASSIGN_OPTION: 92,
-  PROF_REVOKE_OPTION: 93,
+  // ── Profile (85-97) ──────────────────────────────
+  PROF_GET: 85,
+  PROF_GET_ALL: 86,
+  PROF_CREATE: 87,
+  PROF_UPDATE: 88,
+  PROF_DELETE: 89,
+  PROF_GRANT_PERM: 90,
+  PROF_REVOKE_PERM: 91,
+  PROF_ASSIGN_SUBSYSTEM: 92,
+  PROF_REVOKE_SUBSYSTEM: 93,
+  PROF_ASSIGN_MENU: 94,
+  PROF_REVOKE_MENU: 95,
+  PROF_ASSIGN_OPTION: 96,
+  PROF_REVOKE_OPTION: 97,
 
-  // ── Property (94-98) ─────────────────────────────
-  PROP_GET: 94,
-  PROP_GET_ALL: 95,
-  PROP_CREATE: 96,
-  PROP_UPDATE: 97,
-  PROP_DELETE: 98,
+  // ── Property (98-102) ─────────────────────────────
+  PROP_GET: 98,
+  PROP_GET_ALL: 99,
+  PROP_CREATE: 100,
+  PROP_UPDATE: 101,
+  PROP_DELETE: 102,
 
-  // ── Report (99-103) ──────────────────────────────
-  REPORT_GET: 99,
-  REPORT_GET_ALL: 100,
-  REPORT_CREATE: 101,
-  REPORT_UPDATE: 102,
-  REPORT_DELETE: 103,
+  // ── Report (103-107) ──────────────────────────────
+  REPORT_GET: 103,
+  REPORT_GET_ALL: 104,
+  REPORT_CREATE: 105,
+  REPORT_UPDATE: 106,
+  REPORT_DELETE: 107,
 
-  // ── Subsystem (104-108) ──────────────────────────
-  SUB_GET: 104,
-  SUB_GET_ALL: 105,
-  SUB_CREATE: 106,
-  SUB_UPDATE: 107,
-  SUB_DELETE: 108,
+  // ── Subsystem (108-112) ──────────────────────────
+  SUB_GET: 108,
+  SUB_GET_ALL: 109,
+  SUB_CREATE: 110,
+  SUB_UPDATE: 111,
+  SUB_DELETE: 112,
 
-  // ── User (109-115) ───────────────────────────────
-  USER_GET: 109,
-  USER_GET_ALL: 110,
-  USER_CREATE: 111,
-  USER_UPDATE: 112,
-  USER_DELETE: 113,
-  USER_ASSIGN_PROFILE: 114,
-  USER_REVOKE_PROFILE: 115,
+  // ── User (113-119) ───────────────────────────────
+  USER_GET: 113,
+  USER_GET_ALL: 114,
+  USER_CREATE: 115,
+  USER_UPDATE: 116,
+  USER_DELETE: 117,
+  USER_ASSIGN_PROFILE: 118,
+  USER_REVOKE_PROFILE: 119,
 } as const
 
 export type TxKey = keyof typeof TX

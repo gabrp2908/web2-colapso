@@ -173,8 +173,8 @@ export function useCreateOption() {
 
 // ── Notifications ──────────────────────────────────
 
-export function useNotificationList() {
-  return useQuery({ queryKey: ['notifications'], queryFn: () => notificationService.getAll() })
+export function useNotificationList(filters?: Record<string, unknown>) {
+  return useQuery({ queryKey: ['notifications', filters], queryFn: () => notificationService.getAll(filters) })
 }
 export function useCreateNotification() {
   const qc = useQueryClient()

@@ -6,7 +6,9 @@ import { useLoanList } from "@/hooks/useLoan";
 
 const SolvenciaModule = () => {
   const { user } = useAuth();
-  const { data, isLoading, isError, error } = useLoanList();
+  const { data, isLoading, isError, error } = useLoanList(
+    user?.userId ? { user_id: user.userId } : undefined
+  );
 
   const loans: any[] = Array.isArray(data?.data) ? data.data : [];
 

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as authService from '@/lib/api/services/auth'
 import type { SessionInfo, NavigationResponse, MenuStructure } from '@/lib/api/types'
 
@@ -46,6 +47,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 // ── Provider ────────────────────────────────────────
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<AuthUser | null>(null)
   const [navigation, setNavigation] = useState<MenuStructure>([])
   const [loading, setLoading] = useState(true)
@@ -98,6 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (identifier: string, password: string) => {
     await authService.login(identifier, password)
+    queryClient.clear()
     const navRes = await authService.getNavigation()
     if (navRes.data) {
       applyNavigation(navRes.data)
@@ -108,6 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await authService.logout()
     } finally {
+      queryClient.clear()
       clearState()
     }
   }

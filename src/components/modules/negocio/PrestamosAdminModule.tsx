@@ -5,97 +5,129 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { HandCoins, Search, Clock, AlertTriangle, CheckCircle, Plus, Edit, Trash2, Users } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { HandCoins, Search, Clock, AlertTriangle, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useRequestList, useAcceptRequest, useRejectRequest } from "@/hooks/useLoan";
 import BackButton from "@/components/BackButton";
 
-interface PrestamoAdmin {
-  id: string;
-  usuario: string;
-  cedula: string;
-  componente: string;
-  cantidad: number;
-  fechaPrestamo: string;
-  fechaLimite: string;
-  estado: "activo" | "vencido" | "devuelto" | "cancelado";
-  aprobadoPor: string;
-}
-
-const initialPrestamos: PrestamoAdmin[] = [
-  { id: "P001", usuario: "Carlos García", cedula: "12345678", componente: "Resistencia 1kΩ", cantidad: 10, fechaPrestamo: "2025-03-01", fechaLimite: "2025-03-15", estado: "activo", aprobadoPor: "Supervisor Pérez" },
-  { id: "P002", usuario: "Ana Martínez", cedula: "11223344", componente: "Capacitor 100µF", cantidad: 5, fechaPrestamo: "2025-02-20", fechaLimite: "2025-03-05", estado: "vencido", aprobadoPor: "Supervisor López" },
-  { id: "P003", usuario: "Luis Pérez", cedula: "55667788", componente: "LED Rojo 5mm", cantidad: 20, fechaPrestamo: "2025-02-10", fechaLimite: "2025-02-25", estado: "devuelto", aprobadoPor: "Supervisor Pérez" },
-  { id: "P004", usuario: "María López", cedula: "99887766", componente: "Arduino UNO R3", cantidad: 1, fechaPrestamo: "2025-03-05", fechaLimite: "2025-03-20", estado: "activo", aprobadoPor: "Supervisor López" },
-  { id: "P005", usuario: "Pedro Rojas", cedula: "44556677", componente: "Protoboard", cantidad: 2, fechaPrestamo: "2025-01-15", fechaLimite: "2025-02-01", estado: "cancelado", aprobadoPor: "Admin" },
-];
-
-const estadoBadge: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; label: string }> = {
-  activo: { variant: "default", label: "Activo" },
-  vencido: { variant: "destructive", label: "Vencido" },
-  devuelto: { variant: "secondary", label: "Devuelto" },
-  cancelado: { variant: "outline", label: "Cancelado" },
+const estadoBadge: Record<string, { className: string; label: string }> = {
+  pending: { className: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "Pendiente" },
+  approved: { className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", label: "Aprobada" },
+  rejected: { className: "bg-red-500/20 text-red-400 border-red-500/30", label: "Rechazada" },
+  active: { className: "bg-primary/20 text-primary border-primary/30", label: "Activo" },
+  returned: { className: "bg-muted text-muted-foreground border-border", label: "Devuelto" },
+  overdue: { className: "bg-destructive/20 text-destructive border-destructive/30", label: "Vencido" },
 };
+
+type RequestRow = Record<string, any>;
 
 interface Props {
   onBack: () => void;
 }
 
 const PrestamosAdminModule = ({ onBack }: Props) => {
-  const [prestamos, setPrestamos] = useState(initialPrestamos);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("todos");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editando, setEditando] = useState<PrestamoAdmin | null>(null);
-  const [deleteDialog, setDeleteDialog] = useState<PrestamoAdmin | null>(null);
+  const [acceptDialog, setAcceptDialog] = useState<RequestRow | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<RequestRow | null>(null);
+  const [estimatedReturn, setEstimatedReturn] = useState("");
+  const [approveNote, setApproveNote] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
 
-  const [form, setForm] = useState({ usuario: "", cedula: "", componente: "", cantidad: "1", fechaPrestamo: "", fechaLimite: "", estado: "activo" as PrestamoAdmin["estado"] });
+  const { data, isLoading, isError, error } = useRequestList();
+  const acceptRequest = useAcceptRequest();
+  const rejectRequest = useRejectRequest();
 
-  const filtered = prestamos.filter((p) => {
-    const matchSearch = p.usuario.toLowerCase().includes(search.toLowerCase()) || p.componente.toLowerCase().includes(search.toLowerCase()) || p.cedula.includes(search);
-    const matchFiltro = filtro === "todos" || p.estado === filtro;
-    return matchSearch && matchFiltro;
+  const requests: RequestRow[] = Array.isArray(data?.data) ? data.data : [];
+
+  const filtered = requests.filter((r) => {
+    const rawStatus = String(r.movement_status ?? "pending").toLowerCase();
+    const status = rawStatus === "requested" ? "pending" : rawStatus;
+    const id = String(r.movement_id ?? "");
+    const user = String(r.user_na ?? r.user_name ?? r.user_full_name ?? "").toLowerCase();
+    const note = String(r.movement_ob ?? "").toLowerCase();
+    const textMatch =
+      id.includes(search) ||
+      user.includes(search.toLowerCase()) ||
+      note.includes(search.toLowerCase());
+    const statusMatch = filtro === "todos" || status === filtro;
+    return textMatch && statusMatch;
   });
 
-  const activos = prestamos.filter(p => p.estado === "activo").length;
-  const vencidos = prestamos.filter(p => p.estado === "vencido").length;
-  const totalUsuarios = new Set(prestamos.map(p => p.cedula)).size;
+  const countByStatus = (status: string) =>
+    requests.filter((r) => {
+      const rawStatus = String(r.movement_status ?? "pending").toLowerCase();
+      const normalized = rawStatus === "requested" ? "pending" : rawStatus;
+      return normalized === status;
+    }).length;
 
-  const openNew = () => {
-    setEditando(null);
-    setForm({ usuario: "", cedula: "", componente: "", cantidad: "1", fechaPrestamo: "", fechaLimite: "", estado: "activo" });
-    setDialogOpen(true);
+  const openAcceptDialog = (r: RequestRow) => {
+    setAcceptDialog(r);
+    setApproveNote("");
+    const today = new Date();
+    today.setDate(today.getDate() + 7);
+    setEstimatedReturn(today.toISOString().slice(0, 10));
   };
 
-  const openEdit = (p: PrestamoAdmin) => {
-    setEditando(p);
-    setForm({ usuario: p.usuario, cedula: p.cedula, componente: p.componente, cantidad: String(p.cantidad), fechaPrestamo: p.fechaPrestamo, fechaLimite: p.fechaLimite, estado: p.estado });
-    setDialogOpen(true);
-  };
-
-  const handleSave = () => {
-    if (!form.usuario || !form.cedula || !form.componente || !form.fechaPrestamo || !form.fechaLimite) {
-      toast({ title: "Error", description: "Complete todos los campos obligatorios", variant: "destructive" });
+  const handleAccept = async () => {
+    if (!acceptDialog) return;
+    if (!estimatedReturn) {
+      toast({ title: "Falta fecha", description: "Indique la fecha estimada de retorno.", variant: "destructive" });
       return;
     }
-    if (editando) {
-      setPrestamos(prev => prev.map(p => p.id === editando.id ? { ...p, ...form, cantidad: parseInt(form.cantidad) } : p));
-      toast({ title: "Préstamo actualizado", description: `Préstamo ${editando.id} modificado exitosamente` });
-    } else {
-      const nuevo: PrestamoAdmin = { id: `P${String(prestamos.length + 1).padStart(3, "0")}`, ...form, cantidad: parseInt(form.cantidad), aprobadoPor: "Admin" };
-      setPrestamos(prev => [...prev, nuevo]);
-      toast({ title: "Préstamo registrado", description: `Nuevo préstamo creado para ${form.usuario}` });
+
+    try {
+      await acceptRequest.mutateAsync({
+        movement_id: Number(acceptDialog.movement_id),
+        movement_estimated_return_dt: estimatedReturn,
+        movement_ob: approveNote || undefined,
+      });
+      toast({ title: "Solicitud aprobada", description: `Solicitud ${acceptDialog.movement_id} aprobada correctamente.` });
+      setAcceptDialog(null);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message ?? "No se pudo aprobar la solicitud", variant: "destructive" });
     }
-    setDialogOpen(false);
   };
 
-  const handleDelete = () => {
-    if (!deleteDialog) return;
-    setPrestamos(prev => prev.filter(p => p.id !== deleteDialog.id));
-    toast({ title: "Préstamo eliminado", description: `Préstamo ${deleteDialog.id} eliminado` });
-    setDeleteDialog(null);
+  const handleReject = async () => {
+    if (!rejectDialog) return;
+    if (!rejectReason.trim()) {
+      toast({ title: "Falta motivo", description: "Ingrese un motivo de rechazo.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await rejectRequest.mutateAsync({
+        movement_id: Number(rejectDialog.movement_id),
+        movement_ob: rejectReason.trim(),
+      });
+      toast({ title: "Solicitud rechazada", description: `Solicitud ${rejectDialog.movement_id} rechazada.` });
+      setRejectDialog(null);
+      setRejectReason("");
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.message ?? "No se pudo rechazar la solicitud", variant: "destructive" });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
+        <span className="text-muted-foreground">Cargando solicitudes...</span>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center py-12 text-destructive">
+        <AlertCircle className="w-5 h-5 mr-2" />
+        <span>{(error as any)?.message ?? "Error al cargar solicitudes"}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -103,26 +135,25 @@ const PrestamosAdminModule = ({ onBack }: Props) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <HandCoins className="w-7 h-7 text-primary" />
-          <h2 className="text-xl font-bold text-foreground">Gestión de Préstamos</h2>
+          <h2 className="text-xl font-bold text-foreground">Gestión de Solicitudes</h2>
         </div>
-        <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" />Nuevo Préstamo</Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold text-foreground">{activos}</p><p className="text-xs text-muted-foreground">Activos</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><AlertTriangle className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold text-foreground">{vencidos}</p><p className="text-xs text-muted-foreground">Vencidos</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><Users className="w-5 h-5 text-accent" /><div><p className="text-2xl font-bold text-foreground">{totalUsuarios}</p><p className="text-xs text-muted-foreground">Usuarios</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-5 h-5 text-amber-500" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("pending")}</p><p className="text-xs text-muted-foreground">Pendientes</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><CheckCircle className="w-5 h-5 text-emerald-500" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("approved")}</p><p className="text-xs text-muted-foreground">Aprobadas</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><AlertTriangle className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("rejected")}</p><p className="text-xs text-muted-foreground">Rechazadas</p></div></CardContent></Card>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-base">Todos los Préstamos</CardTitle>
+            <CardTitle className="text-base">Solicitudes de Préstamo</CardTitle>
             <div className="flex items-center gap-3">
               <div className="flex gap-1">
-                {["todos", "activo", "vencido", "devuelto", "cancelado"].map(f => (
+                {["todos", "pending", "approved", "rejected"].map(f => (
                   <button key={f} onClick={() => setFiltro(f)} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filtro === f ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}`}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    {f === "todos" ? "Todos" : estadoBadge[f]?.label ?? f}
                   </button>
                 ))}
               </div>
@@ -139,88 +170,102 @@ const PrestamosAdminModule = ({ onBack }: Props) => {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Usuario</TableHead>
-                <TableHead>Cédula</TableHead>
-                <TableHead>Componente</TableHead>
-                <TableHead>Cant.</TableHead>
-                <TableHead>Fecha Préstamo</TableHead>
-                <TableHead>Fecha Límite</TableHead>
+                <TableHead>Observación</TableHead>
+                <TableHead>Fecha Solicitud</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Aprobado Por</TableHead>
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(p => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.id}</TableCell>
-                  <TableCell className="font-medium">{p.usuario}</TableCell>
-                  <TableCell className="text-xs">{p.cedula}</TableCell>
-                  <TableCell>{p.componente}</TableCell>
-                  <TableCell>{p.cantidad}</TableCell>
-                  <TableCell>{p.fechaPrestamo}</TableCell>
-                  <TableCell>{p.fechaLimite}</TableCell>
-                  <TableCell><Badge variant={estadoBadge[p.estado].variant}>{estadoBadge[p.estado].label}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{p.aprobadoPor}</TableCell>
+              {filtered.map((r) => {
+                const rawStatus = String(r.movement_status ?? "pending").toLowerCase();
+                const status = rawStatus === "requested" ? "pending" : rawStatus;
+                const badge = estadoBadge[status] ?? estadoBadge.pending;
+                const isPending = status === "pending";
+
+                return (
+                <TableRow key={r.movement_id}>
+                  <TableCell className="font-mono text-xs">{r.movement_id}</TableCell>
+                  <TableCell className="font-medium">{r.user_na ?? r.user_name ?? r.user_full_name ?? `Usuario #${r.user_id ?? "—"}`}</TableCell>
+                  <TableCell>{r.movement_ob ?? "—"}</TableCell>
+                  <TableCell>{r.movement_created_dt ?? r.created_at ?? "—"}</TableCell>
+                  <TableCell><Badge variant="outline" className={badge.className}>{badge.label}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Edit className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteDialog(p)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                      {isPending ? (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => openAcceptDialog(r)} disabled={acceptRequest.isPending || rejectRequest.isPending}>
+                            <CheckCircle className="w-4 h-4 mr-1" /> Aprobar
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => setRejectDialog(r)} disabled={acceptRequest.isPending || rejectRequest.isPending}>
+                            <XCircle className="w-4 h-4 mr-1" /> Rechazar
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Sin acciones</span>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No se encontraron préstamos</TableCell></TableRow>}
+              )})}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No se encontraron solicitudes</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={!!acceptDialog} onOpenChange={(open) => !open && setAcceptDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editando ? "Editar Préstamo" : "Nuevo Préstamo"}</DialogTitle>
-            <DialogDescription>{editando ? "Modifique los datos del préstamo." : "Complete los datos para registrar un nuevo préstamo."}</DialogDescription>
+            <DialogTitle>Aprobar Solicitud</DialogTitle>
+            <DialogDescription>
+              Defina la fecha estimada de retorno para la solicitud {acceptDialog?.movement_id ?? ""}.
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Usuario</Label><Input value={form.usuario} onChange={e => setForm({ ...form, usuario: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Cédula</Label><Input value={form.cedula} onChange={e => setForm({ ...form, cedula: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Componente</Label><Input value={form.componente} onChange={e => setForm({ ...form, componente: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Cantidad</Label><Input type="number" min={1} value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Fecha Préstamo</Label><Input type="date" value={form.fechaPrestamo} onChange={e => setForm({ ...form, fechaPrestamo: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Fecha Límite</Label><Input type="date" value={form.fechaLimite} onChange={e => setForm({ ...form, fechaLimite: e.target.value })} /></div>
-            {editando && (
-              <div className="space-y-2 col-span-2">
-                <Label>Estado</Label>
-                <Select value={form.estado} onValueChange={v => setForm({ ...form, estado: v as PrestamoAdmin["estado"] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="activo">Activo</SelectItem>
-                    <SelectItem value="vencido">Vencido</SelectItem>
-                    <SelectItem value="devuelto">Devuelto</SelectItem>
-                    <SelectItem value="cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Fecha estimada de retorno</Label>
+              <Input type="date" value={estimatedReturn} onChange={(e) => setEstimatedReturn(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Observación (opcional)</Label>
+              <Textarea
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+                placeholder="Observación para la aprobación"
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>{editando ? "Guardar Cambios" : "Registrar"}</Button>
+            <Button variant="outline" onClick={() => setAcceptDialog(null)}>Cancelar</Button>
+            <Button onClick={handleAccept} disabled={acceptRequest.isPending}>
+              {acceptRequest.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Aprobando...</> : "Confirmar aprobación"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
-      <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
+      <Dialog open={!!rejectDialog} onOpenChange={(open) => !open && setRejectDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Eliminar Préstamo</DialogTitle>
-            <DialogDescription>¿Está seguro de eliminar el préstamo {deleteDialog?.id} de {deleteDialog?.usuario}? Esta acción no se puede deshacer.</DialogDescription>
+            <DialogTitle>Rechazar Solicitud</DialogTitle>
+            <DialogDescription>
+              Indique el motivo de rechazo para la solicitud {rejectDialog?.movement_id ?? ""}.
+            </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label>Motivo de rechazo</Label>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Motivo del rechazo"
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDelete}>Eliminar</Button>
+            <Button variant="outline" onClick={() => setRejectDialog(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={rejectRequest.isPending}>
+              {rejectRequest.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Rechazando...</> : "Confirmar rechazo"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
