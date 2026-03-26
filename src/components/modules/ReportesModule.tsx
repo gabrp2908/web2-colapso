@@ -1,118 +1,123 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { useMemo, useState } from "react";
+import { BarChart3, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useCreateReport, useReportList } from "@/hooks/useBusiness";
+import { toast } from "@/hooks/use-toast";
 
-const prestamosPorMes = [
-  { mes: "Ene", prestamos: 24 },
-  { mes: "Feb", prestamos: 18 },
-  { mes: "Mar", prestamos: 32 },
-  { mes: "Abr", prestamos: 27 },
-  { mes: "May", prestamos: 41 },
-  { mes: "Jun", prestamos: 35 },
-  { mes: "Jul", prestamos: 20 },
-  { mes: "Ago", prestamos: 29 },
-  { mes: "Sep", prestamos: 38 },
-  { mes: "Oct", prestamos: 33 },
-  { mes: "Nov", prestamos: 45 },
-  { mes: "Dic", prestamos: 22 },
-];
+type ReportSummary = {
+  id: number;
+  report_ty: "overdue_loans" | "solvency" | "devolution_stats";
+  report_na: string;
+  report_de?: string;
+};
 
-const componentesSolicitados = [
-  { nombre: "Resistencias", cantidad: 85, fill: "hsl(213, 80%, 45%)" },
-  { nombre: "Capacitores", cantidad: 62, fill: "hsl(170, 60%, 45%)" },
-  { nombre: "Protoboard", cantidad: 48, fill: "hsl(45, 80%, 55%)" },
-  { nombre: "Multímetro", cantidad: 37, fill: "hsl(340, 65%, 50%)" },
-  { nombre: "Osciloscopio", cantidad: 25, fill: "hsl(270, 55%, 55%)" },
-  { nombre: "Cables", cantidad: 70, fill: "hsl(140, 50%, 45%)" },
-];
-
-const COLORS = componentesSolicitados.map(c => c.fill);
+type ReportGenerated = {
+  id: number;
+  report_ty: string;
+  report_na: string;
+  generated_dt: string;
+  summary?: Record<string, number>;
+  data?: Array<Record<string, unknown>>;
+};
 
 const ReportesModule = () => {
-  const totalPrestamos = prestamosPorMes.reduce((sum, m) => sum + m.prestamos, 0);
-  const mesMax = prestamosPorMes.reduce((a, b) => (a.prestamos > b.prestamos ? a : b));
+  const { data, isLoading } = useReportList();
+  const createReport = useCreateReport();
+  const [selectedType, setSelectedType] = useState<ReportSummary["report_ty"]>("solvency");
+  const [generated, setGenerated] = useState<ReportGenerated | null>(null);
+
+  const catalog: ReportSummary[] = useMemo(() => {
+    const rows = data?.data;
+    return Array.isArray(rows) ? (rows as ReportSummary[]) : [];
+  }, [data]);
+
+  const onGenerate = async () => {
+    try {
+      const response = await createReport.mutateAsync({ report_ty: selectedType });
+      setGenerated((response?.data as ReportGenerated | undefined) ?? null);
+      toast({ title: "Reporte generado", description: "Se obtuvo información actualizada del backend" });
+    } catch {
+      toast({ title: "Error", description: "No se pudo generar el reporte", variant: "destructive" });
+    }
+  };
+
+  const summaryEntries = Object.entries(generated?.summary ?? {});
+  const rows = Array.isArray(generated?.data) ? generated.data : [];
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-foreground">Reportes</h2>
-        <p className="text-sm text-muted-foreground">Estadísticas de préstamos y componentes</p>
+        <h2 className="text-xl font-bold text-foreground flex items-center gap-2"><BarChart3 className="w-6 h-6 text-primary" /> Reportes</h2>
+        <p className="text-sm text-muted-foreground">Reportes analíticos en tiempo real desde backend</p>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Total Préstamos (Año)</p>
-          <p className="text-2xl font-bold text-foreground">{totalPrestamos}</p>
+      <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+        <div className="flex items-center gap-3">
+          <Select value={selectedType} onValueChange={(v) => setSelectedType(v as ReportSummary["report_ty"])}>
+            <SelectTrigger className="w-[260px]"><SelectValue placeholder="Seleccione reporte" /></SelectTrigger>
+            <SelectContent>
+              {catalog.map((c) => (
+                <SelectItem key={c.id} value={c.report_ty}>{c.report_na}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={onGenerate} disabled={createReport.isPending || isLoading}>Generar</Button>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Mes con más actividad</p>
-          <p className="text-2xl font-bold text-foreground">{mesMax.mes} ({mesMax.prestamos})</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm text-muted-foreground">Componentes distintos</p>
-          <p className="text-2xl font-bold text-foreground">{componentesSolicitados.length}</p>
-        </div>
+
+        {generated && (
+          <div className="space-y-3">
+            <div>
+              <p className="text-base font-semibold text-foreground">{generated.report_na}</p>
+              <p className="text-xs text-muted-foreground">Generado: {new Date(generated.generated_dt).toLocaleString()}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {summaryEntries.map(([key, value]) => (
+                <div key={key} className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">{key}</p>
+                  <p className="text-xl font-bold text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="overflow-auto border border-border rounded-lg">
+              {rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground p-4">Sin filas para mostrar.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/40 border-b border-border">
+                      {columns.map((col) => (
+                        <th key={col} className="text-left p-2 font-medium text-muted-foreground">{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, idx) => (
+                      <tr key={idx} className="border-b border-border last:border-0">
+                        {columns.map((col) => (
+                          <td key={`${idx}-${col}`} className="p-2 text-foreground">{String(row[col] ?? "-")}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Bar chart */}
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">Préstamos por Mes</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={prestamosPorMes}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(216, 30%, 22%)" />
-                <XAxis dataKey="mes" tick={{ fill: "hsl(215, 20%, 65%)", fontSize: 12 }} />
-                <YAxis tick={{ fill: "hsl(215, 20%, 65%)", fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(216, 45%, 12%)",
-                    border: "1px solid hsl(216, 30%, 22%)",
-                    borderRadius: "8px",
-                    color: "hsl(210, 40%, 98%)",
-                  }}
-                />
-                <Bar dataKey="prestamos" fill="hsl(213, 80%, 45%)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Pie chart */}
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-base font-semibold text-foreground mb-4">Componentes Más Solicitados</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={componentesSolicitados}
-                  dataKey="cantidad"
-                  nameKey="nombre"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  label={({ nombre, percent }) => `${nombre} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={{ stroke: "hsl(215, 20%, 65%)" }}
-                >
-                  {componentesSolicitados.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(216, 45%, 12%)",
-                    border: "1px solid hsl(216, 30%, 22%)",
-                    borderRadius: "8px",
-                    color: "hsl(210, 40%, 98%)",
-                  }}
-                />
-                <Legend
-                  formatter={(value) => <span style={{ color: "hsl(215, 20%, 65%)" }}>{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      <div className="bg-card border border-border rounded-xl p-4">
+        <p className="text-sm font-semibold text-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Catálogo disponible</p>
+        <ul className="mt-2 text-sm text-muted-foreground space-y-1">
+          {catalog.map((c) => (
+            <li key={c.id}>#{c.id} {c.report_na}</li>
+          ))}
+          {catalog.length === 0 && <li>No hay tipos de reporte disponibles.</li>}
+        </ul>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import RealtimeBridge from "@/components/RealtimeBridge";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
     <ThemeProvider>
       <TooltipProvider>
         <AuthProvider>
+          <RealtimeBridge />
           <Toaster />
           <Sonner />
           <BrowserRouter>

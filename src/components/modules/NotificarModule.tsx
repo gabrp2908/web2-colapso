@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Send, AlertTriangle, Clock, User, CheckCircle2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Send, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -8,116 +8,119 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-
-interface UsuarioVencido {
-  id: string;
-  nombre: string;
-  cedula: string;
-  componente: string;
-  fechaLimite: string;
-  diasVencido: number;
-}
-
-const mockVencidos: UsuarioVencido[] = [
-  { id: "1", nombre: "Carlos García", cedula: "12345678", componente: "Multímetro Fluke", fechaLimite: "2025-03-01", diasVencido: 16 },
-  { id: "2", nombre: "Ana Martínez", cedula: "23456789", componente: "Protoboard", fechaLimite: "2025-03-10", diasVencido: 7 },
-  { id: "3", nombre: "Luis Rodríguez", cedula: "34567890", componente: "Osciloscopio Rigol", fechaLimite: "2025-03-05", diasVencido: 12 },
-  { id: "4", nombre: "María Fernández", cedula: "45678901", componente: "Fuente de Poder", fechaLimite: "2025-03-12", diasVencido: 5 },
-];
+import { useCreateNotification, useNotificationList, useUserList } from "@/hooks/useSecurity";
 
 interface NotificacionEnviada {
-  id: string;
+  id: number;
   destinatario: string;
   tipo: string;
   mensaje: string;
   fecha: string;
 }
 
-const mockHistorial: NotificacionEnviada[] = [
-  { id: "N1", destinatario: "Carlos García", tipo: "Vencimiento", mensaje: "Su préstamo del Multímetro ha vencido.", fecha: "2025-03-14" },
-  { id: "N2", destinatario: "Ana Martínez", tipo: "Recordatorio", mensaje: "Recuerde devolver el Protoboard.", fecha: "2025-03-13" },
-];
+type UserRow = {
+  user_id: number;
+  user_na?: string | null;
+  user_em?: string | null;
+};
+
+type NotificationRow = {
+  notification_id: number;
+  user_id: number;
+  notification_ty?: string | null;
+  notification_msg?: string | null;
+  notification_dt?: string | null;
+};
 
 const NotificarModule = () => {
-  const [destinatario, setDestinatario] = useState("");
-  const [tipo, setTipo] = useState("");
-  const [mensaje, setMensaje] = useState("");
-  const [historial, setHistorial] = useState<NotificacionEnviada[]>(mockHistorial);
+  const { data: usersResponse } = useUserList();
+  const { data: notificationsResponse } = useNotificationList();
+  const createNotification = useCreateNotification();
 
-  const enviarNotificacion = () => {
-    if (!destinatario || !tipo || !mensaje.trim()) {
+  const [destinatarioTipo, setDestinatarioTipo] = useState<"usuario" | "todos">("usuario");
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [asunto, setAsunto] = useState("");
+  const [mensaje, setMensaje] = useState("");
+
+  const users = useMemo(() => {
+    const rows = usersResponse?.data;
+    return Array.isArray(rows) ? (rows as UserRow[]) : [];
+  }, [usersResponse]);
+
+  const userMap = useMemo(() => {
+    return new Map<number, UserRow>(users.map((u) => [u.user_id, u]));
+  }, [users]);
+
+  const historial: NotificacionEnviada[] = useMemo(() => {
+    const rows = notificationsResponse?.data;
+    if (!Array.isArray(rows)) return [];
+    return (rows as NotificationRow[]).map((n) => {
+      const targetUser = userMap.get(Number(n.user_id));
+      const displayName = targetUser?.user_na || targetUser?.user_em || `Usuario #${n.user_id}`;
+      return {
+        id: Number(n.notification_id ?? 0),
+        destinatario: displayName,
+        tipo: String(n.notification_ty ?? "info"),
+        mensaje: String(n.notification_msg ?? ""),
+        fecha: new Date(String(n.notification_dt ?? new Date().toISOString())).toISOString().split("T")[0],
+      };
+    });
+  }, [notificationsResponse, userMap]);
+
+  const enviarNotificacion = async () => {
+    if (!tipo || !mensaje.trim() || !asunto.trim()) {
       toast.error("Complete todos los campos antes de enviar.");
       return;
     }
-    const usuario = mockVencidos.find((u) => u.id === destinatario);
-    const nueva: NotificacionEnviada = {
-      id: `N${Date.now()}`,
-      destinatario: usuario?.nombre || "Desconocido",
-      tipo,
-      mensaje,
-      fecha: new Date().toISOString().split("T")[0],
-    };
-    setHistorial([nueva, ...historial]);
-    setDestinatario("");
-    setTipo("");
-    setMensaje("");
-    toast.success(`Notificación enviada a ${usuario?.nombre}`);
-  };
 
-  const notificarDirecto = (usuario: UsuarioVencido) => {
-    const msg = `Estimado(a) ${usuario.nombre}, su préstamo del componente "${usuario.componente}" venció el ${usuario.fechaLimite}. Tiene ${usuario.diasVencido} día(s) de retraso. Por favor acérquese al laboratorio para regularizar su situación.`;
-    const nueva: NotificacionEnviada = {
-      id: `N${Date.now()}`,
-      destinatario: usuario.nombre,
-      tipo: "Vencimiento",
-      mensaje: msg,
-      fecha: new Date().toISOString().split("T")[0],
-    };
-    setHistorial([nueva, ...historial]);
-    toast.success(`Notificación de vencimiento enviada a ${usuario.nombre}`);
+    const destinationUserIds =
+      destinatarioTipo === "usuario"
+        ? (() => {
+            const userId = Number(selectedUserId);
+            return Number.isInteger(userId) && userId > 0 ? [userId] : [];
+          })()
+        : users.map((u) => u.user_id);
+
+    if (destinationUserIds.length === 0) {
+      toast.error("Seleccione un destinatario válido.");
+      return;
+    }
+
+    try {
+      const results = await Promise.allSettled(
+        destinationUserIds.map((userId) =>
+          createNotification.mutateAsync({
+            user_id: userId,
+            notification_ty: tipo,
+            notification_tit: asunto,
+            notification_msg: mensaje,
+          })
+        )
+      );
+
+      const okCount = results.filter((r) => r.status === "fulfilled").length;
+      const failCount = results.length - okCount;
+
+      setTipo("");
+      setAsunto("");
+      setMensaje("");
+
+      if (failCount === 0) {
+        toast.success(`Notificación enviada a ${okCount} destinatario(s)`);
+      } else {
+        toast.warning(`Enviadas: ${okCount}. Fallidas: ${failCount}.`);
+      }
+    } catch {
+      toast.error("No se pudo enviar la notificación");
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-foreground">Notificar Usuarios</h2>
-        <p className="text-sm text-muted-foreground">Envíe notificaciones a usuarios con préstamos vencidos o recordatorios</p>
-      </div>
-
-      {/* Users with overdue loans */}
-      <div>
-        <h3 className="text-base font-semibold text-foreground mb-3 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          Préstamos Vencidos
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {mockVencidos.map((u) => (
-            <div
-              key={u.id}
-              className="bg-card border border-border rounded-xl p-4 flex items-center justify-between hover:border-accent transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium text-foreground text-sm truncate">{u.nombre}</span>
-                </div>
-                <p className="text-xs text-muted-foreground ml-6">{u.componente}</p>
-                <div className="flex items-center gap-2 ml-6 mt-1">
-                  <Clock className="w-3 h-3 text-red-400" />
-                  <span className="text-xs text-red-400">{u.diasVencido} días de retraso</span>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => notificarDirecto(u)}
-                className="shrink-0 ml-3"
-              >
-                <Send className="w-3.5 h-3.5 mr-1" />
-                Notificar
-              </Button>
-            </div>
-          ))}
-        </div>
+        <p className="text-sm text-muted-foreground">Envíe notificaciones reales por backend y consulte el historial</p>
       </div>
 
       {/* Manual notification form */}
@@ -125,17 +128,14 @@ const NotificarModule = () => {
         <h3 className="text-base font-semibold text-foreground mb-4">Enviar Notificación Manual</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="text-sm text-muted-foreground mb-1.5 block">Destinatario</label>
-            <Select value={destinatario} onValueChange={setDestinatario}>
+            <label className="text-sm text-muted-foreground mb-1.5 block">Modo de destinatario</label>
+            <Select value={destinatarioTipo} onValueChange={(v) => setDestinatarioTipo(v as "usuario" | "todos") }>
               <SelectTrigger className="bg-background border-border">
-                <SelectValue placeholder="Seleccionar usuario" />
+                <SelectValue placeholder="Seleccione modo" />
               </SelectTrigger>
               <SelectContent>
-                {mockVencidos.map((u) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.nombre} — {u.cedula}
-                  </SelectItem>
-                ))}
+                <SelectItem value="usuario">Usuario específico</SelectItem>
+                <SelectItem value="todos">Todos los usuarios</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -146,13 +146,45 @@ const NotificarModule = () => {
                 <SelectValue placeholder="Tipo de notificación" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Vencimiento">Vencimiento</SelectItem>
-                <SelectItem value="Recordatorio">Recordatorio</SelectItem>
-                <SelectItem value="Información">Información</SelectItem>
-                <SelectItem value="Urgente">Urgente</SelectItem>
+                <SelectItem value="warning">Vencimiento</SelectItem>
+                <SelectItem value="reminder">Recordatorio</SelectItem>
+                <SelectItem value="info">Información</SelectItem>
+                <SelectItem value="urgent">Urgente</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        </div>
+        {destinatarioTipo === "usuario" && (
+          <div className="mb-4">
+            <label className="text-sm text-muted-foreground mb-1.5 block">Destinatario</label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger className="bg-background border-border">
+                <SelectValue placeholder="Seleccione usuario" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.user_id} value={String(u.user_id)}>
+                    {(u.user_na || "Sin nombre")} {u.user_em ? `(${u.user_em})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {destinatarioTipo === "todos" && (
+          <div className="mb-4 rounded-lg border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Se enviará la notificación a todos los usuarios disponibles ({users.length}).
+          </div>
+        )}
+        <div className="mb-4">
+          <label className="text-sm text-muted-foreground mb-1.5 block">Asunto</label>
+          <Input
+            placeholder="Título de la notificación"
+            value={asunto}
+            onChange={(e) => setAsunto(e.target.value)}
+            className="bg-background border-border"
+          />
         </div>
         <div className="mb-4">
           <label className="text-sm text-muted-foreground mb-1.5 block">Mensaje</label>
@@ -184,13 +216,13 @@ const NotificarModule = () => {
             </thead>
             <tbody>
               {historial.map((n) => (
-                <tr key={n.id} className="border-b border-border last:border-0 hover:bg-secondary/30">
+                <tr key={String(n.id)} className="border-b border-border last:border-0 hover:bg-secondary/30">
                   <td className="p-3 text-foreground">{n.fecha}</td>
                   <td className="p-3 text-foreground">{n.destinatario}</td>
                   <td className="p-3">
                     <Badge variant="outline" className={
-                      n.tipo === "Vencimiento" ? "bg-red-500/15 text-red-400 border-red-500/30" :
-                      n.tipo === "Urgente" ? "bg-amber-500/15 text-amber-400 border-amber-500/30" :
+                      n.tipo === "warning" ? "bg-red-500/15 text-red-400 border-red-500/30" :
+                      n.tipo === "urgent" ? "bg-amber-500/15 text-amber-400 border-amber-500/30" :
                       "bg-blue-500/15 text-blue-400 border-blue-500/30"
                     }>
                       {n.tipo}

@@ -3,12 +3,12 @@ import { devolutionService, reportService } from '@/lib/api/services/business'
 
 // ── Devolutions ────────────────────────────────────
 
-export function useDevolutionList() {
-  return useQuery({ queryKey: ['devolutions'], queryFn: () => devolutionService.getAll() })
+export function useDevolutionList(filters?: Record<string, unknown>) {
+  return useQuery({ queryKey: ['devolutions', filters], queryFn: () => devolutionService.getAll(filters) })
 }
 export function useCreateDevolution() {
   const qc = useQueryClient()
-  return useMutation({ mutationFn: devolutionService.create, onSuccess: () => qc.invalidateQueries({ queryKey: ['devolutions'] }) })
+  return useMutation({ mutationFn: devolutionService.register, onSuccess: () => qc.invalidateQueries({ queryKey: ['devolutions'] }) })
 }
 
 // ── Reports ────────────────────────────────────────

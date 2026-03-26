@@ -5,9 +5,11 @@ import type { ApiResponse } from '../types'
 export const devolutionService = {
   get: (id: number): Promise<ApiResponse> =>
     dispatch(TX.DEV_GET, { id }),
-  getAll: (): Promise<ApiResponse> =>
-    dispatch(TX.DEV_GET_ALL, {}),
+  getAll: (filters?: Record<string, unknown>): Promise<ApiResponse> =>
+    dispatch(TX.DEV_GET_ALL, filters ?? {}),
   create: (params: Record<string, unknown>): Promise<ApiResponse> =>
+    dispatch(TX.DEV_CREATE, params),
+  register: (params: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.DEV_CREATE, params),
   update: (params: { id: number; [key: string]: unknown }): Promise<ApiResponse> =>
     dispatch(TX.DEV_UPDATE, params),

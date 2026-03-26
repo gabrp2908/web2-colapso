@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import * as authService from '@/lib/api/services/auth'
-import { ApiError } from '@/lib/api/client'
 import type { SessionInfo, NavigationResponse, MenuStructure } from '@/lib/api/types'
 
 // ── Tipos públicos ──────────────────────────────────
@@ -87,14 +86,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [applyNavigation, clearState])
 
   const switchProfile = async (profileId: number) => {
-    setLoading(true)
-    try {
-      await authService.switchActiveProfile(profileId)
-      const res = await authService.getNavigation()
-      if (res.data) applyNavigation(res.data)
-    } finally {
-      setLoading(false)
-    }
+    await authService.switchActiveProfile(profileId)
+    const res = await authService.getNavigation()
+    if (res.data) applyNavigation(res.data)
   }
 
   /** Al montar, verificar si hay sesión activa */

@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Bell, CheckCheck, Clock, Info, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { useNotificationList } from "@/hooks/useSecurity";
 
 
 interface Notificacion {
-  id: string;
+  id: number;
   titulo: string;
   mensaje: string;
   fecha: string;
@@ -13,34 +14,72 @@ interface Notificacion {
   tipo: "info" | "alerta" | "exito";
 }
 
-const mockNotificaciones: Notificacion[] = [
-  { id: "1", titulo: "Solicitud aprobada", mensaje: "Tu solicitud SOL-001 fue aprobada por el supervisor.", fecha: "Hace 5 min", leida: false, tipo: "exito" },
-  { id: "2", titulo: "Devolución pendiente", mensaje: "Tienes una devolución pendiente del Multímetro Digital.", fecha: "Hace 1 hora", leida: false, tipo: "alerta" },
-  { id: "3", titulo: "Nuevo componente", mensaje: "Se agregaron 50 unidades de Resistencia 1kΩ al inventario.", fecha: "Hace 3 horas", leida: false, tipo: "info" },
-  { id: "4", titulo: "Mantenimiento programado", mensaje: "El Osciloscopio Rigol estará en mantenimiento hasta el viernes.", fecha: "Ayer", leida: true, tipo: "info" },
-  { id: "5", titulo: "Solicitud rechazada", mensaje: "Tu solicitud SOL-003 fue rechazada. Motivo: sin stock.", fecha: "Hace 2 días", leida: true, tipo: "alerta" },
-];
+type NotificationRow = {
+  notification_id: number;
+  notification_ty?: string | null;
+  notification_tit?: string | null;
+  notification_msg?: string | null;
+  notification_dt?: string | null;
+};
 
-const tipoIcon: Record<Notificacion["tipo"], React.ReactNode> = {
+const tipoIcon: Record<Notificacion["tipo"], ReactNode> = {
   info: <Info className="w-4 h-4 text-blue-400" />,
   alerta: <AlertTriangle className="w-4 h-4 text-amber-400" />,
   exito: <CheckCheck className="w-4 h-4 text-emerald-400" />,
 };
 
+function toRelativeDate(value?: string | null): string {
+  if (!value) return "Ahora";
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "Ahora";
+
+  const diffMs = Date.now() - dt.getTime();
+  const diffMin = Math.max(1, Math.floor(diffMs / 60000));
+  if (diffMin < 60) return `Hace ${diffMin} min`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `Hace ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `Hace ${diffDays} día${diffDays === 1 ? "" : "s"}`;
+}
+
+function mapType(value?: string | null): Notificacion["tipo"] {
+  const type = (value ?? "").toLowerCase();
+  if (type.includes("warn") || type.includes("alert") || type.includes("devolution")) return "alerta";
+  if (type.includes("success") || type.includes("exito")) return "exito";
+  return "info";
+}
+
 const NotificationsPanel = () => {
-  const [notificaciones, setNotificaciones] = useState(mockNotificaciones);
+  const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [mostrarTodas, setMostrarTodas] = useState(false);
+  const { data: notificationsResponse } = useNotificationList();
+
+  const notificaciones: Notificacion[] = useMemo(() => {
+    const rows = ((notificationsResponse?.data as NotificationRow[] | undefined) ?? []);
+    return rows.map((row) => ({
+      id: row.notification_id,
+      titulo: row.notification_tit ?? "Notificación",
+      mensaje: row.notification_msg ?? "",
+      fecha: toRelativeDate(row.notification_dt),
+      leida: readIds.has(row.notification_id),
+      tipo: mapType(row.notification_ty),
+    }));
+  }, [notificationsResponse, readIds]);
 
   const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
   const marcarTodasLeidas = () => {
-    setNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+    setReadIds(new Set(notificaciones.map((n) => n.id)));
   };
 
-  const marcarLeida = (id: string) => {
-    setNotificaciones((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, leida: true } : n))
-    );
+  const marcarLeida = (id: number) => {
+    setReadIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   };
 
   const visibles = mostrarTodas ? notificaciones : notificaciones.slice(0, 4);

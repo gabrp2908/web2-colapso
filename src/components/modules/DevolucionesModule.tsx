@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -6,59 +6,93 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PackageSearch, Search, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useCreateDevolution, useDevolutionList } from "@/hooks/useBusiness";
+import { devolutionService } from "@/lib/api/services/business";
 
-interface Prestamo {
-  id: string;
-  usuario: string;
-  cedula: string;
-  componente: string;
-  cantidad: number;
-  fechaPrestamo: string;
-  fechaLimite: string;
-  estado: "activo" | "vencido";
-}
+type DevolutionSummary = {
+  movement_id: number;
+  user_id: number;
+  movement_booking_dt?: string;
+  movement_estimated_return_dt?: string;
+  total_items: number;
+  returned_items: number;
+  pending_items: number;
+  damaged_items: number;
+};
 
-const mockPrestamos: Prestamo[] = [
-  { id: "P001", usuario: "Carlos García", cedula: "12345678", componente: "Resistencia 1kΩ", cantidad: 10, fechaPrestamo: "2025-03-01", fechaLimite: "2025-03-15", estado: "activo" },
-  { id: "P002", usuario: "Ana Martínez", cedula: "11223344", componente: "Capacitor 100µF", cantidad: 5, fechaPrestamo: "2025-02-20", fechaLimite: "2025-03-05", estado: "vencido" },
-  { id: "P003", usuario: "Luis Pérez", cedula: "55667788", componente: "LED Rojo 5mm", cantidad: 20, fechaPrestamo: "2025-03-05", fechaLimite: "2025-03-20", estado: "activo" },
-  { id: "P004", usuario: "María López", cedula: "99887766", componente: "Arduino UNO R3", cantidad: 1, fechaPrestamo: "2025-02-28", fechaLimite: "2025-03-10", estado: "vencido" },
-  { id: "P005", usuario: "Pedro Rojas", cedula: "44556677", componente: "Protoboard", cantidad: 2, fechaPrestamo: "2025-03-08", fechaLimite: "2025-03-22", estado: "activo" },
-];
+type DevolutionDetail = {
+  movement_detail_id: number;
+  movement_detail_am: number;
+  pending_am?: number;
+};
+
+type DevolutionEntity = {
+  movement_id: number;
+  details?: DevolutionDetail[];
+};
 
 const DevolucionesModule = () => {
-  const [prestamos, setPrestamos] = useState(mockPrestamos);
-  const [search, setSearch] = useState("");
-  const [selectedPrestamo, setSelectedPrestamo] = useState<Prestamo | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [cantidadDevuelta, setCantidadDevuelta] = useState("");
-  const [observaciones, setObservaciones] = useState("");
+  const { data, isLoading, refetch } = useDevolutionList();
+  const registerMutation = useCreateDevolution();
 
-  const filtered = prestamos.filter(
+  const devoluciones: DevolutionSummary[] = useMemo(() => {
+    const rows = data?.data;
+    return Array.isArray(rows) ? (rows as DevolutionSummary[]) : [];
+  }, [data]);
+
+  const [search, setSearch] = useState("");
+  const [selectedMovement, setSelectedMovement] = useState<DevolutionSummary | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [observaciones, setObservaciones] = useState("");
+  const [condition, setCondition] = useState<"good" | "damaged" | "partial">("good");
+
+  const filtered = devoluciones.filter(
     (p) =>
-      p.usuario.toLowerCase().includes(search.toLowerCase()) ||
-      p.componente.toLowerCase().includes(search.toLowerCase()) ||
-      p.cedula.includes(search)
+      String(p.movement_id).includes(search) ||
+      String(p.user_id).includes(search)
   );
 
-  const activos = prestamos.filter((p) => p.estado === "activo").length;
-  const vencidos = prestamos.filter((p) => p.estado === "vencido").length;
+  const activos = devoluciones.filter((p) => p.pending_items > 0).length;
+  const vencidos = devoluciones.filter((p) => p.damaged_items > 0).length;
 
-  const handleDevolucion = () => {
-    if (!selectedPrestamo) return;
-    const cant = parseInt(cantidadDevuelta);
-    if (isNaN(cant) || cant <= 0 || cant > selectedPrestamo.cantidad) {
-      toast({ title: "Error", description: "Cantidad inválida", variant: "destructive" });
+  const handleDevolucion = async () => {
+    if (!selectedMovement) return;
+
+    try {
+      const response = await devolutionService.get(selectedMovement.movement_id);
+      const entity = response?.data as DevolutionEntity | undefined;
+      const details = Array.isArray(entity?.details) ? entity.details : [];
+
+      if (details.length === 0) {
+        toast({ title: "Error", description: "No se encontraron detalles del movimiento", variant: "destructive" });
+        return;
+      }
+
+      const payloadDetails = details.map((detail) => ({
+        movement_detail_id: detail.movement_detail_id,
+        returned_am: Math.max(0, Number(detail.pending_am ?? detail.movement_detail_am ?? 0)),
+        condition,
+      }));
+
+      await registerMutation.mutateAsync({
+        movement_id: selectedMovement.movement_id,
+        devolution_ob: observaciones,
+        details: payloadDetails,
+      });
+
+      toast({ title: "Devolución registrada", description: `Movimiento #${selectedMovement.movement_id} actualizado` });
+      setDialogOpen(false);
+      setSelectedMovement(null);
+      setObservaciones("");
+      setCondition("good");
+      await refetch();
+    } catch {
+      toast({ title: "Error", description: "No se pudo registrar la devolución", variant: "destructive" });
       return;
     }
-    setPrestamos((prev) => prev.filter((p) => p.id !== selectedPrestamo.id));
-    toast({ title: "Devolución registrada", description: `${selectedPrestamo.componente} devuelto por ${selectedPrestamo.usuario}` });
-    setDialogOpen(false);
-    setCantidadDevuelta("");
-    setObservaciones("");
-    setSelectedPrestamo(null);
   };
 
   return (
@@ -71,56 +105,57 @@ const DevolucionesModule = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold text-foreground">{activos}</p><p className="text-xs text-muted-foreground">Activos</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><AlertTriangle className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold text-foreground">{vencidos}</p><p className="text-xs text-muted-foreground">Vencidos</p></div></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3"><CheckCircle className="w-5 h-5 text-accent" /><div><p className="text-2xl font-bold text-foreground">{prestamos.length}</p><p className="text-xs text-muted-foreground">Total</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><CheckCircle className="w-5 h-5 text-accent" /><div><p className="text-2xl font-bold text-foreground">{devoluciones.length}</p><p className="text-xs text-muted-foreground">Total</p></div></CardContent></Card>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-base">Préstamos Pendientes</CardTitle>
+            <CardTitle className="text-base">Movimientos de Devolución</CardTitle>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Buscar por usuario, cédula o componente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Buscar por movimiento o usuario..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
         </CardHeader>
         <CardContent>
+          {isLoading && <p className="text-sm text-muted-foreground mb-4">Cargando devoluciones...</p>}
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
+                <TableHead>Movimiento</TableHead>
                 <TableHead>Usuario</TableHead>
-                <TableHead>Componente</TableHead>
-                <TableHead>Cant.</TableHead>
-                <TableHead>Fecha Préstamo</TableHead>
-                <TableHead>Fecha Límite</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Devueltos</TableHead>
+                <TableHead>Pendientes</TableHead>
+                <TableHead>Dañados</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Acción</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.id}</TableCell>
-                  <TableCell>{p.usuario}</TableCell>
-                  <TableCell>{p.componente}</TableCell>
-                  <TableCell>{p.cantidad}</TableCell>
-                  <TableCell>{p.fechaPrestamo}</TableCell>
-                  <TableCell>{p.fechaLimite}</TableCell>
+                <TableRow key={p.movement_id}>
+                  <TableCell className="font-mono text-xs">#{p.movement_id}</TableCell>
+                  <TableCell>{p.user_id}</TableCell>
+                  <TableCell>{p.total_items}</TableCell>
+                  <TableCell>{p.returned_items}</TableCell>
+                  <TableCell>{p.pending_items}</TableCell>
+                  <TableCell>{p.damaged_items}</TableCell>
                   <TableCell>
-                    <Badge variant={p.estado === "vencido" ? "destructive" : "default"}>
-                      {p.estado === "vencido" ? "Vencido" : "Activo"}
+                    <Badge variant={p.pending_items > 0 ? "secondary" : p.damaged_items > 0 ? "destructive" : "default"}>
+                      {p.pending_items > 0 ? "Pendiente" : p.damaged_items > 0 ? "Con daños" : "Completa"}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" onClick={() => { setSelectedPrestamo(p); setCantidadDevuelta(String(p.cantidad)); setDialogOpen(true); }}>
-                      Devolver
+                    <Button size="sm" onClick={() => { setSelectedMovement(p); setDialogOpen(true); }}>
+                      Registrar
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No se encontraron préstamos</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No se encontraron devoluciones</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -131,17 +166,24 @@ const DevolucionesModule = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Devolución</DialogTitle>
-            <DialogDescription>Confirme los datos de la devolución del componente.</DialogDescription>
+            <DialogDescription>Confirme el registro de devolución para el movimiento seleccionado.</DialogDescription>
           </DialogHeader>
-          {selectedPrestamo && (
+          {selectedMovement && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Usuario:</span> <span className="font-medium text-foreground">{selectedPrestamo.usuario}</span></div>
-                <div><span className="text-muted-foreground">Componente:</span> <span className="font-medium text-foreground">{selectedPrestamo.componente}</span></div>
+                <div><span className="text-muted-foreground">Movimiento:</span> <span className="font-medium text-foreground">#{selectedMovement.movement_id}</span></div>
+                <div><span className="text-muted-foreground">Usuario:</span> <span className="font-medium text-foreground">{selectedMovement.user_id}</span></div>
               </div>
               <div className="space-y-2">
-                <Label>Cantidad a devolver (máx: {selectedPrestamo.cantidad})</Label>
-                <Input type="number" min={1} max={selectedPrestamo.cantidad} value={cantidadDevuelta} onChange={(e) => setCantidadDevuelta(e.target.value)} />
+                <Label>Condición de devolución</Label>
+                <Select value={condition} onValueChange={(v) => setCondition(v as "good" | "damaged" | "partial") }>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="good">Buena</SelectItem>
+                    <SelectItem value="partial">Parcial</SelectItem>
+                    <SelectItem value="damaged">Dañada</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>Observaciones (opcional)</Label>
@@ -151,7 +193,7 @@ const DevolucionesModule = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleDevolucion}>Confirmar Devolución</Button>
+            <Button onClick={handleDevolucion} disabled={registerMutation.isPending}>Confirmar Devolución</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

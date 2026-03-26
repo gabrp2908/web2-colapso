@@ -201,12 +201,19 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
   const [view, setView] = useState<ViewState>({ type: "home" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isSwitchingProfile, setIsSwitchingProfile] = useState(false);
 
   const availableProfiles = useMemo(() => {
     return user?.profiles || [];
   }, [user]);
 
   const hasDynamicNav = navigation.length > 0;
+
+  const selectedProfileValue = useMemo(() => {
+    if (!user?.activeProfileId) return undefined;
+    const active = String(user.activeProfileId);
+    return availableProfiles.some((p) => String(p.id) === active) ? active : undefined;
+  }, [availableProfiles, user?.activeProfileId]);
 
   /** Sidebar items derivados de la navegación dinámica o fallback */
   const sidebarItems = useMemo(() => {
@@ -263,6 +270,17 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     try { await logout(); navigate("/login"); } catch { navigate("/login"); } finally { setIsLoggingOut(false); }
   };
 
+  const handleProfileChange = async (val: string) => {
+    const profileId = Number(val);
+    if (!Number.isInteger(profileId) || profileId <= 0 || isSwitchingProfile) return;
+    setIsSwitchingProfile(true);
+    try {
+      await switchProfile(profileId);
+    } finally {
+      setIsSwitchingProfile(false);
+    }
+  };
+
   const handleSidebarClick = (item: { key: string; subsystemId?: number }) => {
     if (item.subsystemId != null) {
       setView({ type: "subsystem", subsystemId: item.subsystemId });
@@ -296,7 +314,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className={`bg-card border-r border-border transition-all duration-300 shrink-0 ${sidebarOpen ? "w-56" : "w-0 overflow-hidden"}`}>
+        <aside className={`relative bg-card border-r border-border transition-all duration-300 shrink-0 ${sidebarOpen ? "w-56" : "w-0 overflow-hidden"}`}>
           <nav className="p-3 space-y-1">
             {sidebarItems.map((item) => (
               <button
@@ -317,11 +335,12 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
             <div className={`p-4 mt-auto border-t border-border bg-card absolute bottom-0 w-full transition-opacity duration-300 ${sidebarOpen ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden pointer-events-none p-0 border-0"}`}>
               <p className="text-xs font-semibold text-muted-foreground mb-2 text-center">Perfil Activo</p>
               <Select 
-                value={user.activeProfileId ? user.activeProfileId.toString() : ""} 
-                onValueChange={(val) => val && switchProfile(Number(val))}
+                value={selectedProfileValue}
+                onValueChange={handleProfileChange}
+                disabled={isSwitchingProfile}
               >
                 <SelectTrigger className="w-full text-xs h-8 border-accent/30 bg-secondary/50">
-                  <SelectValue placeholder="Seleccionar Perfil..." />
+                  <SelectValue placeholder={isSwitchingProfile ? "Cambiando perfil..." : "Seleccionar Perfil..."} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProfiles.map(p => (
