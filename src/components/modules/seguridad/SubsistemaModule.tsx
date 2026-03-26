@@ -5,27 +5,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Settings, Search, Plus, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Settings, Search, Plus, Trash2, Edit, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import BackButton from "@/components/BackButton";
-import { useSubsystemList, useCreateSubsystem, useDeleteSubsystem } from "@/hooks/useSecurity";
+import { useSubsystemList, useCreateSubsystem, useUpdateSubsystem, useDeleteSubsystem } from "@/hooks/useSecurity";
 
 const SubsistemaModule = ({ onBack }: { onBack: () => void }) => {
   const [busqueda, setBusqueda] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editSubsystem, setEditSubsystem] = useState<any>(null);
   const [form, setForm] = useState({ subsystem_na: "" });
 
   const { data, isLoading, isError, error } = useSubsystemList();
   const createMut = useCreateSubsystem();
+  const updateMut = useUpdateSubsystem();
   const deleteMut = useDeleteSubsystem();
 
   const subsistemas: any[] = Array.isArray(data?.data) ? data.data : [];
   const filtered = subsistemas.filter((s: any) => (s.subsystem_na ?? "").toLowerCase().includes(busqueda.toLowerCase()));
 
-  const handleCreate = async () => {
+  const openNew = () => { setEditSubsystem(null); setForm({ subsystem_na: "" }); setDialogOpen(true); };
+  const openEdit = (s: any) => { setEditSubsystem(s); setForm({ subsystem_na: s.subsystem_na ?? "" }); setDialogOpen(true); };
+
+  const handleSave = async () => {
     if (!form.subsystem_na.trim()) { toast({ title: "Error", description: "El nombre es requerido", variant: "destructive" }); return; }
-    try { await createMut.mutateAsync(form); toast({ title: "Subsistema creado" }); setDialogOpen(false); }
-    catch (err: any) { toast({ title: "Error", description: err?.message, variant: "destructive" }); }
+    try {
+      if (editSubsystem) {
+        await updateMut.mutateAsync({ subsystem_id: editSubsystem.subsystem_id, subsystem_na: form.subsystem_na });
+        toast({ title: "Subsistema actualizado" });
+      } else {
+        await createMut.mutateAsync(form);
+        toast({ title: "Subsistema creado" });
+      }
+      setDialogOpen(false);
+    } catch (err: any) { 
+      toast({ title: "Error", description: err?.message, variant: "destructive" }); 
+    }
   };
 
   const handleDelete = async (s: any) => {
@@ -41,11 +56,7 @@ const SubsistemaModule = ({ onBack }: { onBack: () => void }) => {
       <BackButton onClick={onBack} />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3"><Settings className="w-6 h-6 text-accent" /><h2 className="text-xl font-bold text-foreground">Subsistemas</h2></div>
-        <Button size="sm" onClick={() => { setForm({ subsystem_na: "" }); setDialogOpen(true); }}><Plus className="w-4 h-4 mr-1" /> Nuevo</Button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">Total</p><p className="text-2xl font-bold text-foreground">{subsistemas.length}</p></CardContent></Card>
+        <Button size="sm" onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="pl-10" /></div>
@@ -58,7 +69,10 @@ const SubsistemaModule = ({ onBack }: { onBack: () => void }) => {
               <TableRow key={ss.subsystem_id}>
                 <TableCell className="font-mono text-xs">{ss.subsystem_id}</TableCell>
                 <TableCell className="font-medium">{ss.subsystem_na}</TableCell>
-                <TableCell className="text-right"><Button size="icon" variant="ghost" onClick={() => handleDelete(ss)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button></TableCell>
+                <TableCell className="text-right space-x-1">
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(ss)}><Edit className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => handleDelete(ss)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                </TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No hay subsistemas</TableCell></TableRow>}
@@ -68,9 +82,14 @@ const SubsistemaModule = ({ onBack }: { onBack: () => void }) => {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo Subsistema</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2"><div className="space-y-2"><Label>Nombre</Label><Input value={form.subsystem_na} onChange={(e) => setForm({ subsystem_na: e.target.value })} /></div></div>
-          <DialogFooter><Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button><Button onClick={handleCreate} disabled={createMut.isPending}>Guardar</Button></DialogFooter>
+          <DialogHeader><DialogTitle>{editSubsystem ? "Editar Subsistema" : "Nuevo Subsistema"}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2"><Label>Nombre</Label><Input value={form.subsystem_na} onChange={(e) => setForm({ subsystem_na: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending}>Guardar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

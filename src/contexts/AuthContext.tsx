@@ -11,6 +11,9 @@ export interface AuthUser {
   email: string | null
   profileIds: number[]
   activeProfileId: number | null
+  mode: 'active' | 'union'
+  effectiveProfileIds: number[]
+  profiles?: { id: number; profile_na: string }[]
 }
 
 interface AuthContextType {
@@ -25,6 +28,7 @@ interface AuthContextType {
   resetPassword: (code: string, newPassword: string) => Promise<void>
   requestUsername: (email: string) => Promise<void>
   checkSession: () => Promise<void>
+  switchProfile: (profileId: number) => Promise<void>
 }
 
 export interface RegisterParams {
@@ -55,6 +59,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: session.email,
       profileIds: session.profileIds,
       activeProfileId: session.activeProfileId,
+      mode: session.mode,
+      effectiveProfileIds: session.effectiveProfileIds,
+      profiles: session.profiles,
     })
     setNavigation(nav)
   }, [])
@@ -78,6 +85,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false)
     }
   }, [applyNavigation, clearState])
+
+  const switchProfile = async (profileId: number) => {
+    setLoading(true)
+    try {
+      await authService.switchActiveProfile(profileId)
+      const res = await authService.getNavigation()
+      if (res.data) applyNavigation(res.data)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   /** Al montar, verificar si hay sesión activa */
   useEffect(() => {
@@ -134,6 +152,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         resetPassword,
         requestUsername,
         checkSession,
+        switchProfile,
       }}
     >
       {children}

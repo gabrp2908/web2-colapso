@@ -17,15 +17,15 @@ export const devolutionService = {
 
 export const reportService = {
   get: (id: number): Promise<ApiResponse> =>
-    dispatch(TX.REPORT_GET, { report_id: id }),
+    dispatch(TX.REPORT_GET, { id }),
   getAll: (filters?: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.REPORT_GET_ALL, filters ?? {}),
   create: (params: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.REPORT_CREATE, params),
-  update: (params: { report_id: number; [key: string]: unknown }): Promise<ApiResponse> =>
+  update: (params: { id: number; [key: string]: unknown }): Promise<ApiResponse> =>
     dispatch(TX.REPORT_UPDATE, params),
   delete: (id: number): Promise<ApiResponse> =>
-    dispatch(TX.REPORT_DELETE, { report_id: id }),
+    dispatch(TX.REPORT_DELETE, { id }),
 }
 
 export const propertyService = {

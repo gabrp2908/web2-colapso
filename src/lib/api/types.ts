@@ -21,6 +21,7 @@ export interface SessionInfo {
   activeProfileId: number | null
   mode: 'active' | 'union'
   effectiveProfileIds: number[]
+  profiles?: { id: number; profile_na: string }[]
 }
 
 // ── Estructura de Navegación (espejo de security.ts del backend) ────

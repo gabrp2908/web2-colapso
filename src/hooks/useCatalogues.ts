@@ -6,7 +6,7 @@ import { lapseService } from '@/lib/api/services/lapse'
 
 // ── Location ───────────────────────────────────────
 
-export function useLocationList(filters?: { location_na?: string }) {
+export function useLocationList(filters?: { location_de?: string; location_sh?: number; location_dr?: number }) {
   return useQuery({ queryKey: ['locations', filters], queryFn: () => locationService.getAll(filters) })
 }
 export function useCreateLocation() {

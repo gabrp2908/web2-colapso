@@ -13,8 +13,8 @@ import BackButton from "@/components/BackButton";
 import {
   useProfileList, useCreateProfile, useUpdateProfile, useDeleteProfile,
   useSubsystemList, useMenuList, useOptionList,
+  useAssignSubsystem, useRevokeSubsystem, useAssignMenu, useRevokeMenu, useAssignOption, useRevokeOption
 } from "@/hooks/useSecurity";
-import { profileService } from "@/lib/api/services/security";
 
 const PerfilModule = ({ onBack }: { onBack: () => void }) => {
   const [busqueda, setBusqueda] = useState("");
@@ -31,6 +31,13 @@ const PerfilModule = ({ onBack }: { onBack: () => void }) => {
   const createMut = useCreateProfile();
   const updateMut = useUpdateProfile();
   const deleteMut = useDeleteProfile();
+
+  const assignSubMut = useAssignSubsystem();
+  const revokeSubMut = useRevokeSubsystem();
+  const assignMenuMut = useAssignMenu();
+  const revokeMenuMut = useRevokeMenu();
+  const assignOptMut = useAssignOption();
+  const revokeOptMut = useRevokeOption();
 
   const profiles: any[] = Array.isArray(data?.data) ? data.data : [];
   const subsystems: any[] = Array.isArray(subsData?.data) ? subsData.data : [];
@@ -67,22 +74,20 @@ const PerfilModule = ({ onBack }: { onBack: () => void }) => {
   const handleAssign = async (type: "subsystem" | "menu" | "option", id: number) => {
     if (!selectedProfile) return;
     try {
-      if (type === "subsystem") await profileService.assignSubsystem(selectedProfile.profile_id, id);
-      else if (type === "menu") await profileService.assignMenu(selectedProfile.profile_id, id);
-      else await profileService.assignOption(selectedProfile.profile_id, id);
+      if (type === "subsystem") await assignSubMut.mutateAsync({ profileId: selectedProfile.profile_id, subsystemId: id });
+      else if (type === "menu") await assignMenuMut.mutateAsync({ profileId: selectedProfile.profile_id, menuId: id });
+      else await assignOptMut.mutateAsync({ profileId: selectedProfile.profile_id, optionId: id });
       toast({ title: "Asignación exitosa" });
-      refetch();
     } catch (err: any) { toast({ title: "Error", description: err?.message, variant: "destructive" }); }
   };
 
   const handleRevoke = async (type: "subsystem" | "menu" | "option", id: number) => {
     if (!selectedProfile) return;
     try {
-      if (type === "subsystem") await profileService.revokeSubsystem(selectedProfile.profile_id, id);
-      else if (type === "menu") await profileService.revokeMenu(selectedProfile.profile_id, id);
-      else await profileService.revokeOption(selectedProfile.profile_id, id);
+      if (type === "subsystem") await revokeSubMut.mutateAsync({ profileId: selectedProfile.profile_id, subsystemId: id });
+      else if (type === "menu") await revokeMenuMut.mutateAsync({ profileId: selectedProfile.profile_id, menuId: id });
+      else await revokeOptMut.mutateAsync({ profileId: selectedProfile.profile_id, optionId: id });
       toast({ title: "Revocación exitosa" });
-      refetch();
     } catch (err: any) { toast({ title: "Error", description: err?.message, variant: "destructive" }); }
   };
 
@@ -126,7 +131,7 @@ const PerfilModule = ({ onBack }: { onBack: () => void }) => {
                 <TableCell className="font-medium">{p.profile_na}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{p.profile_de ?? "—"}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button size="sm" variant="outline" onClick={() => { setSelectedProfile(p); setAssignDialogOpen(true); }} title="Asignaciones de seguridad"><Link2 className="w-4 h-4" /></Button>
+                  <Button size="sm" variant="outline" onClick={() => { setSelectedProfile(p); setAssignDialogOpen(true); }} title="Asignaciones de seguridad"><Link2 className="w-4 h-4 mr-1" /> Permisos</Button>
                   <Button size="icon" variant="ghost" onClick={() => openEdit(p)}><Edit className="w-4 h-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => handleDelete(p)} className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
                 </TableCell>
@@ -167,41 +172,59 @@ const PerfilModule = ({ onBack }: { onBack: () => void }) => {
             </TabsList>
 
             <TabsContent value="subsystems" className="space-y-2 mt-3">
-              {subsystems.map((s: any) => (
-                <div key={s.subsystem_id} className="flex items-center justify-between p-2 rounded-lg border border-border bg-card">
-                  <span className="text-sm font-medium">{s.subsystem_na}</span>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => handleAssign("subsystem", s.subsystem_id)}><Link2 className="w-3 h-3 mr-1" />Asignar</Button>
-                    <Button size="sm" variant="outline" onClick={() => handleRevoke("subsystem", s.subsystem_id)} className="text-destructive hover:text-destructive"><Unlink className="w-3 h-3 mr-1" />Revocar</Button>
+              {subsystems.map((s: any) => {
+                const isAssigned = (selectedProfile?.subsystem_ids || []).includes(s.subsystem_id);
+                return (
+                  <div key={s.subsystem_id} className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${isAssigned ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+                    <span className="text-sm font-medium">{s.subsystem_na}</span>
+                    <div className="flex gap-1">
+                      {isAssigned ? (
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleRevoke("subsystem", s.subsystem_id)} disabled={revokeSubMut.isPending}><Unlink className="w-3.5 h-3.5 mr-1" /> Revocar</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => handleAssign("subsystem", s.subsystem_id)} disabled={assignSubMut.isPending}><Link2 className="w-3.5 h-3.5 mr-1" /> Asignar</Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {subsystems.length === 0 && <p className="text-center text-muted-foreground py-4">No hay subsistemas</p>}
             </TabsContent>
 
             <TabsContent value="menus" className="space-y-2 mt-3">
-              {menus.map((m: any) => (
-                <div key={m.menu_id} className="flex items-center justify-between p-2 rounded-lg border border-border bg-card">
-                  <span className="text-sm font-medium">{m.menu_na}</span>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => handleAssign("menu", m.menu_id)}><Link2 className="w-3 h-3 mr-1" />Asignar</Button>
-                    <Button size="sm" variant="outline" onClick={() => handleRevoke("menu", m.menu_id)} className="text-destructive hover:text-destructive"><Unlink className="w-3 h-3 mr-1" />Revocar</Button>
+              {menus.map((m: any) => {
+                const isAssigned = (selectedProfile?.menu_ids || []).includes(m.menu_id);
+                return (
+                  <div key={m.menu_id} className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${isAssigned ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+                    <span className="text-sm font-medium">{m.menu_na}</span>
+                    <div className="flex gap-1">
+                      {isAssigned ? (
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleRevoke("menu", m.menu_id)} disabled={revokeMenuMut.isPending}><Unlink className="w-3.5 h-3.5 mr-1" /> Revocar</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => handleAssign("menu", m.menu_id)} disabled={assignMenuMut.isPending}><Link2 className="w-3.5 h-3.5 mr-1" /> Asignar</Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {menus.length === 0 && <p className="text-center text-muted-foreground py-4">No hay menús</p>}
             </TabsContent>
 
             <TabsContent value="options" className="space-y-2 mt-3">
-              {options.map((o: any) => (
-                <div key={o.option_id} className="flex items-center justify-between p-2 rounded-lg border border-border bg-card">
-                  <span className="text-sm font-medium">{o.option_na}</span>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="outline" onClick={() => handleAssign("option", o.option_id)}><Link2 className="w-3 h-3 mr-1" />Asignar</Button>
-                    <Button size="sm" variant="outline" onClick={() => handleRevoke("option", o.option_id)} className="text-destructive hover:text-destructive"><Unlink className="w-3 h-3 mr-1" />Revocar</Button>
+              {options.map((o: any) => {
+                const isAssigned = (selectedProfile?.option_ids || []).includes(o.option_id);
+                return (
+                  <div key={o.option_id} className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${isAssigned ? 'bg-primary/5 border-primary/30' : 'bg-card border-border'}`}>
+                    <span className="text-sm font-medium">{o.option_na}</span>
+                    <div className="flex gap-1">
+                      {isAssigned ? (
+                        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleRevoke("option", o.option_id)} disabled={revokeOptMut.isPending}><Unlink className="w-3.5 h-3.5 mr-1" /> Revocar</Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => handleAssign("option", o.option_id)} disabled={assignOptMut.isPending}><Link2 className="w-3.5 h-3.5 mr-1" /> Asignar</Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {options.length === 0 && <p className="text-center text-muted-foreground py-4">No hay opciones</p>}
             </TabsContent>
           </Tabs>

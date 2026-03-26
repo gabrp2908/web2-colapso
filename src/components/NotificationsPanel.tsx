@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Bell, CheckCheck, Clock, Info, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ScrollArea } from "./ui/scroll-area";
+
 
 interface Notificacion {
   id: string;
@@ -29,6 +29,7 @@ const tipoIcon: Record<Notificacion["tipo"], React.ReactNode> = {
 
 const NotificationsPanel = () => {
   const [notificaciones, setNotificaciones] = useState(mockNotificaciones);
+  const [mostrarTodas, setMostrarTodas] = useState(false);
 
   const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
@@ -41,6 +42,8 @@ const NotificationsPanel = () => {
       prev.map((n) => (n.id === id ? { ...n, leida: true } : n))
     );
   };
+
+  const visibles = mostrarTodas ? notificaciones : notificaciones.slice(0, 4);
 
   return (
     <Popover>
@@ -63,35 +66,44 @@ const NotificationsPanel = () => {
             </Button>
           )}
         </div>
-        <ScrollArea className="max-h-[350px]">
+        <div className="max-h-[350px] overflow-y-auto overflow-x-hidden">
           {notificaciones.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm py-8">Sin notificaciones</p>
           ) : (
-            notificaciones.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => marcarLeida(n.id)}
-                className={`w-full text-left px-4 py-3 border-b border-border last:border-0 transition-colors hover:bg-secondary/50 ${
-                  !n.leida ? "bg-secondary/30" : ""
-                }`}
-              >
-                <div className="flex gap-3">
-                  <div className="mt-0.5 shrink-0">{tipoIcon[n.tipo]}</div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-medium ${!n.leida ? "text-foreground" : "text-muted-foreground"}`}>
-                      {n.titulo}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.mensaje}</p>
-                    <p className="text-[10px] text-muted-foreground/70 mt-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {n.fecha}
-                    </p>
+            <>
+              {visibles.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => marcarLeida(n.id)}
+                  className={`w-full text-left px-4 py-3 border-b border-border last:border-0 transition-colors hover:bg-secondary/50 ${
+                    !n.leida ? "bg-secondary/30" : ""
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <div className="mt-0.5 shrink-0">{tipoIcon[n.tipo]}</div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-medium ${!n.leida ? "text-foreground" : "text-muted-foreground"}`}>
+                        {n.titulo}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.mensaje}</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {n.fecha}
+                      </p>
+                    </div>
+                    {!n.leida && <span className="w-2 h-2 bg-accent rounded-full mt-1.5 shrink-0" />}
                   </div>
-                  {!n.leida && <span className="w-2 h-2 bg-accent rounded-full mt-1.5 shrink-0" />}
+                </button>
+              ))}
+              {!mostrarTodas && notificaciones.length > 4 && (
+                <div className="p-2 border-t border-border mt-auto sticky bottom-0 bg-card">
+                  <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground hover:text-foreground" onClick={() => setMostrarTodas(true)}>
+                    Ver más...
+                  </Button>
                 </div>
-              </button>
-            ))
+              )}
+            </>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

@@ -54,6 +54,48 @@ export function useDeleteProfile() {
   const qc = useQueryClient()
   return useMutation({ mutationFn: (id: number) => profileService.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }) })
 }
+export function useAssignSubsystem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; subsystemId: number }) => profileService.assignSubsystem(p.profileId, p.subsystemId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
+export function useRevokeSubsystem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; subsystemId: number }) => profileService.revokeSubsystem(p.profileId, p.subsystemId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
+export function useAssignMenu() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; menuId: number }) => profileService.assignMenu(p.profileId, p.menuId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
+export function useRevokeMenu() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; menuId: number }) => profileService.revokeMenu(p.profileId, p.menuId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
+export function useAssignOption() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; optionId: number }) => profileService.assignOption(p.profileId, p.optionId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
+export function useRevokeOption() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (p: { profileId: number; optionId: number }) => profileService.revokeOption(p.profileId, p.optionId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profiles'] }),
+  })
+}
 
 // ── Subsystems ─────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { ReactNode, useState, useMemo } from "react";
+import { ReactNode, useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import type { MenuStructure, SecuritySubsystem, SecurityMenu } from "@/lib/api/types";
@@ -14,9 +14,7 @@ import SolvenciaModule from "./modules/SolvenciaModule";
 import ReportesModule from "./modules/ReportesModule";
 import DevolucionesModule from "./modules/DevolucionesModule";
 import PrestamosModule from "./modules/PrestamosModule";
-import UbicacionModule from "./modules/UbicacionModule";
 import NotificarModule from "./modules/NotificarModule";
-import PermisosModule from "./modules/PermisosModule";
 import MantenimientoModule from "./modules/MantenimientoModule";
 import AuditoriaModule from "./modules/AuditoriaModule";
 import PrestamosAdminModule from "./modules/negocio/PrestamosAdminModule";
@@ -24,13 +22,12 @@ import DevolucionesAdminModule from "./modules/negocio/DevolucionesAdminModule";
 import NotificacionesAdminModule from "./modules/negocio/NotificacionesAdminModule";
 import ReportesAdminModule from "./modules/negocio/ReportesAdminModule";
 import UsuariosModule from "./modules/seguridad/UsuariosModule";
-import PersonasModule from "./modules/seguridad/PersonasModule";
+
 
 import PerfilModule from "./modules/seguridad/PerfilModule";
 import SubsistemaModule from "./modules/seguridad/SubsistemaModule";
 import ObjetosModule from "./modules/seguridad/ObjetosModule";
 import MetodosModule from "./modules/seguridad/MetodosModule";
-import PermisosModModule from "./modules/seguridad/PermisosModModule";
 import NotificacionModule from "./modules/seguridad/NotificacionModule";
 import CalendarioModule from "./modules/seguridad/CalendarioModule";
 
@@ -42,9 +39,8 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger
-} from "./ui/dropdown-menu";
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "./ui/select";
 
 // ── Mapeo módulo → componente (key normalizado) ─────
 
@@ -56,10 +52,9 @@ const moduleRegistry: Record<string, ModuleRenderer> = {
   solvencia: (b) => <><BackButton onClick={b} /><SolvenciaModule /></>,
   devoluciones: (b) => <><BackButton onClick={b} /><DevolucionesModule /></>,
   inventario: (b) => <><BackButton onClick={b} /><InventarioModule /></>,
-  ubicacion: (b) => <><BackButton onClick={b} /><UbicacionModule /></>,
   reportes: (b) => <><BackButton onClick={b} /><ReportesModule /></>,
   notificar: (b) => <><BackButton onClick={b} /><NotificarModule /></>,
-  permisos: (b) => <><BackButton onClick={b} /><PermisosModule /></>,
+  permisos: (b) => <PerfilModule onBack={b} />,
   mantenimiento: (b) => <><BackButton onClick={b} /><MantenimientoModule /></>,
   auditoria: (b) => <><BackButton onClick={b} /><AuditoriaModule /></>,
   prestamos_admin: (b) => <PrestamosAdminModule onBack={b} />,
@@ -67,13 +62,12 @@ const moduleRegistry: Record<string, ModuleRenderer> = {
   notificaciones_admin: (b) => <NotificacionesAdminModule onBack={b} />,
   reportes_admin: (b) => <ReportesAdminModule onBack={b} />,
   usuarios: (b) => <UsuariosModule onBack={b} />,
-  personas: (b) => <PersonasModule onBack={b} />,
+
 
   perfil: (b) => <PerfilModule onBack={b} />,
   subsistema: (b) => <SubsistemaModule onBack={b} />,
   objetos: (b) => <ObjetosModule onBack={b} />,
   metodos: (b) => <MetodosModule onBack={b} />,
-  permisos_mod: (b) => <PermisosModModule onBack={b} />,
   notificacion: (b) => <NotificacionModule onBack={b} />,
   calendario: (b) => <CalendarioModule onBack={b} />,
 };
@@ -186,7 +180,7 @@ const fallbackItems: FallbackItem[] = [
   { label: "Solvencia", key: "solvencia" },
   { label: "Devoluciones", key: "devoluciones" },
   { label: "Inventario", key: "inventario" },
-  { label: "Ubicación", key: "ubicacion" },
+
   { label: "Reportes", key: "reportes" },
   { label: "Notificar", key: "notificar" },
   { label: "Permisos", key: "permisos" },
@@ -202,11 +196,15 @@ type ViewState =
 // ── DashboardLayout ─────────────────────────────────
 
 const DashboardLayout = ({ children }: { children?: ReactNode }) => {
-  const { user, navigation, loading, logout } = useAuth();
+  const { user, navigation, loading, logout, switchProfile } = useAuth();
   const navigate = useNavigate();
   const [view, setView] = useState<ViewState>({ type: "home" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const availableProfiles = useMemo(() => {
+    return user?.profiles || [];
+  }, [user]);
 
   const hasDynamicNav = navigation.length > 0;
 
@@ -242,6 +240,12 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     return items;
   }, [navigation, hasDynamicNav]);
 
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/login", { replace: true });
+    }
+  }, [loading, user, navigate]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -250,10 +254,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     );
   }
 
-  if (!user) {
-    navigate("/login");
-    return null;
-  }
+  if (!user) return null;
 
   const displayName = user.username || user.email || `User #${user.userId}`;
 
@@ -287,24 +288,9 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <NotificationsPanel />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white dark:text-foreground hover:bg-white/10 dark:hover:bg-secondary"><User className="w-5 h-5" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-card border-border">
-              <div className="px-3 py-2">
-                <p className="font-semibold text-sm text-foreground">{displayName}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-foreground" onClick={() => setView({ type: "module", moduleKey: "perfil" })}>Ver Perfil</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="text-destructive" disabled={isLoggingOut}>
-                {isLoggingOut ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LogOut className="w-4 h-4 mr-2" />}
-                Cerrar Sesión
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button variant="ghost" size="icon" onClick={handleLogout} disabled={isLoggingOut} title="Cerrar sesión" className="text-white dark:text-foreground hover:bg-white/10 dark:hover:bg-secondary text-destructive hover:text-destructive">
+            {isLoggingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
+          </Button>
         </div>
       </header>
 
@@ -326,6 +312,25 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
               </button>
             ))}
           </nav>
+          
+          {user && availableProfiles.length > 0 && (
+            <div className={`p-4 mt-auto border-t border-border bg-card absolute bottom-0 w-full transition-opacity duration-300 ${sidebarOpen ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden pointer-events-none p-0 border-0"}`}>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 text-center">Perfil Activo</p>
+              <Select 
+                value={user.activeProfileId ? user.activeProfileId.toString() : ""} 
+                onValueChange={(val) => val && switchProfile(Number(val))}
+              >
+                <SelectTrigger className="w-full text-xs h-8 border-accent/30 bg-secondary/50">
+                  <SelectValue placeholder="Seleccionar Perfil..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProfiles.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()} className="text-xs">{p.profile_na}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </aside>
 
         {/* Main content */}
@@ -343,7 +348,7 @@ interface MainContentProps {
   view: ViewState;
   navigation: MenuStructure;
   hasDynamicNav: boolean;
-  sidebarItems: { label: string; key: string; icon: ReactNode }[];
+  sidebarItems: { label: string; key: string; icon: ReactNode; subsystemId?: number }[];
   onNavigate: (v: ViewState) => void;
   goHome: () => void;
 }
@@ -417,8 +422,8 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
           <button
             key={item.key}
             onClick={() => {
-              if ((item as any).subsystemId != null) {
-                onNavigate({ type: "subsystem", subsystemId: (item as any).subsystemId });
+              if (item.subsystemId != null) {
+                onNavigate({ type: "subsystem", subsystemId: item.subsystemId });
               } else {
                 onNavigate({ type: "module", moduleKey: item.key });
               }

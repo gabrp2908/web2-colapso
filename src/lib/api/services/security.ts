@@ -7,10 +7,31 @@ export const userService = {
     dispatch(TX.USER_GET, { user_id: id }),
   getAll: (filters?: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.USER_GET_ALL, filters ?? {}),
-  create: (params: { email: string; password: string; user_na?: string }): Promise<ApiResponse> =>
-    dispatch(TX.USER_CREATE, params),
-  update: (params: { user_id: number; [key: string]: unknown }): Promise<ApiResponse> =>
-    dispatch(TX.USER_UPDATE, params),
+  create: (params: {
+    user_em?: string
+    user_pw?: string
+    user_na?: string
+    email?: string
+    password?: string
+  }): Promise<ApiResponse> =>
+    dispatch(TX.USER_CREATE, {
+      ...params,
+      user_em: params.user_em ?? params.email,
+      user_pw: params.user_pw ?? params.password,
+    }),
+  update: (params: {
+    user_id: number
+    user_em?: string
+    user_pw?: string
+    email?: string
+    password?: string
+    [key: string]: unknown
+  }): Promise<ApiResponse> =>
+    dispatch(TX.USER_UPDATE, {
+      ...params,
+      user_em: params.user_em ?? params.email,
+      user_pw: params.user_pw ?? params.password,
+    }),
   delete: (id: number): Promise<ApiResponse> =>
     dispatch(TX.USER_DELETE, { user_id: id }),
   assignProfile: (userId: number, profileId: number): Promise<ApiResponse> =>
@@ -31,9 +52,9 @@ export const profileService = {
   delete: (id: number): Promise<ApiResponse> =>
     dispatch(TX.PROF_DELETE, { profile_id: id }),
   grantPermission: (profileId: number, objectName: string, methodName: string): Promise<ApiResponse> =>
-    dispatch(TX.PROF_GRANT_PERM, { profile_id: profileId, object_name: objectName, method_name: methodName }),
+    dispatch(TX.PROF_GRANT_PERM, { profile_id: profileId, object_na: objectName, method_na: methodName }),
   revokePermission: (profileId: number, objectName: string, methodName: string): Promise<ApiResponse> =>
-    dispatch(TX.PROF_REVOKE_PERM, { profile_id: profileId, object_name: objectName, method_name: methodName }),
+    dispatch(TX.PROF_REVOKE_PERM, { profile_id: profileId, object_na: objectName, method_na: methodName }),
   assignSubsystem: (profileId: number, subsystemId: number): Promise<ApiResponse> =>
     dispatch(TX.PROF_ASSIGN_SUBSYSTEM, { profile_id: profileId, subsystem_id: subsystemId }),
   revokeSubsystem: (profileId: number, subsystemId: number): Promise<ApiResponse> =>
@@ -115,13 +136,13 @@ export const optionService = {
 
 export const notificationService = {
   get: (id: number): Promise<ApiResponse> =>
-    dispatch(TX.NOTIF_GET, { notification_id: id }),
+    dispatch(TX.NOTIF_GET, { id }),
   getAll: (filters?: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.NOTIF_GET_ALL, filters ?? {}),
   create: (params: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.NOTIF_CREATE, params),
-  update: (params: { notification_id: number; [key: string]: unknown }): Promise<ApiResponse> =>
+  update: (params: { id: number; [key: string]: unknown }): Promise<ApiResponse> =>
     dispatch(TX.NOTIF_UPDATE, params),
   delete: (id: number): Promise<ApiResponse> =>
-    dispatch(TX.NOTIF_DELETE, { notification_id: id }),
+    dispatch(TX.NOTIF_DELETE, { id }),
 }
