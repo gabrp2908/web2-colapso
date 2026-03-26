@@ -29,6 +29,16 @@ export async function register(params: {
   return dispatch(TX.AUTH_REGISTER, params)
 }
 
+/** Verificar email con código OTP */
+export async function verifyEmail(code: string): Promise<ApiResponse> {
+  return dispatch(TX.AUTH_VERIFY_EMAIL, { code })
+}
+
+/** Solicitar reenvío de código de verificación */
+export async function requestEmailVerification(identifier: string): Promise<ApiResponse> {
+  return dispatch(TX.AUTH_REQUEST_EMAIL_VERIFICATION, { identifier })
+}
+
 /** Solicitar reset de password por email */
 export async function requestPasswordReset(email: string): Promise<ApiResponse> {
   return dispatch(TX.AUTH_REQUEST_PASSWORD_RESET, { email })

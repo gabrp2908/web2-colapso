@@ -107,6 +107,9 @@ const Login = () => {
             <Link to="/forgot-password?mode=usuario" className="text-muted-foreground hover:text-foreground text-sm block transition-colors">
               Olvidé mi usuario
             </Link>
+            <Link to="/verify-email" className="text-muted-foreground hover:text-foreground text-sm block transition-colors mt-4">
+              Reenviar código de verificación
+            </Link>
           </div>
         </div>
         

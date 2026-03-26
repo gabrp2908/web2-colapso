@@ -49,9 +49,9 @@ const Register = () => {
       });
       toast({
         title: "Registro exitoso",
-        description: "Revise su correo para verificar su cuenta.",
+        description: "Revisa tu correo para verificar tu cuenta.",
       });
-      navigate("/login");
+      navigate("/verify-email", { state: { email: correo } });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.alerts?.join(", ") || err.message);
