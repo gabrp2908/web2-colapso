@@ -38,6 +38,7 @@ import {
   Box, Waypoints, CalendarDays, Lock, Bell, Wrench, ClipboardList, Loader2, LayoutGrid
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { useRequestList } from "@/hooks/useLoan";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "./ui/select";
@@ -142,6 +143,16 @@ function resolveModuleKey(name: string): string {
   return aliasMap[lower] ?? lower.replace(/\s+/g, "_");
 }
 
+function resolveRoleAwareModuleKey(key: string, canReviewAllRequests: boolean): string {
+  if (canReviewAllRequests && (key === "solicitudes" || key === "prestamos")) return "prestamos_admin";
+  return key;
+}
+
+function resolveRoleAwareLabel(label: string, key: string): string {
+  if (key === "prestamos_admin") return "Gestion Solicitudes";
+  return formatNavigationLabel(label);
+}
+
 /** Mapeo de nombre a icono */
 const iconMap: Record<string, ReactNode> = {
   solicitudes: <FileText className="w-5 h-5" />,
@@ -226,6 +237,30 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     return user?.profiles || [];
   }, [user]);
 
+  const activeProfileName = useMemo(() => {
+    if (!user?.activeProfileId) return "";
+    const active = availableProfiles.find((p) => p.id === user.activeProfileId);
+    return (active?.profile_na ?? "").toLowerCase();
+  }, [availableProfiles, user?.activeProfileId]);
+
+  const canReviewAllRequests =
+    activeProfileName === "supervisor" ||
+    activeProfileName === "super_admin" ||
+    activeProfileName === "security_admin";
+
+  const { data: requestsResponse } = useRequestList(
+    canReviewAllRequests ? undefined : user?.userId ? { user_id: user.userId } : undefined
+  );
+
+  const pendingRequestsCount = useMemo(() => {
+    if (!canReviewAllRequests) return 0;
+    const rows = Array.isArray(requestsResponse?.data) ? requestsResponse.data : [];
+    return rows.filter((row) => {
+      const status = String(row.movement_status ?? row.movement_type_de ?? "").toLowerCase();
+      return status === "pending" || status === "requested" || status.includes("solicit");
+    }).length;
+  }, [canReviewAllRequests, requestsResponse]);
+
   const hasDynamicNav = navigation.length > 0;
 
   const selectedProfileValue = useMemo(() => {
@@ -237,7 +272,19 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
   /** Sidebar items derivados de la navegación dinámica o fallback */
   const sidebarItems = useMemo(() => {
     if (!hasDynamicNav) {
-      return fallbackItems.map((f) => ({ label: f.label, key: f.key, icon: getIcon(f.key) }));
+      const seen = new Set<string>();
+      const items: { label: string; key: string; icon: ReactNode; subsystemId?: number }[] = [];
+      for (const f of fallbackItems) {
+        const mappedKey = resolveRoleAwareModuleKey(f.key, canReviewAllRequests);
+        if (seen.has(mappedKey)) continue;
+        seen.add(mappedKey);
+        items.push({
+          label: resolveRoleAwareLabel(f.label, mappedKey),
+          key: mappedKey,
+          icon: getIcon(mappedKey),
+        });
+      }
+      return items;
     }
 
     if (navigation.length === 1) {
@@ -249,18 +296,29 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
         const hasOptions = (menu.options?.length ?? 0) > 0;
         if (hasOptions) {
           for (const option of menu.options ?? []) {
-            const key = resolveModuleKey(option.option_na);
+            const key = resolveRoleAwareModuleKey(
+              resolveModuleKey(option.option_na),
+              canReviewAllRequests
+            );
             if (seen.has(key)) continue;
             seen.add(key);
-            flatItems.push({ label: formatNavigationLabel(option.option_na), key, icon: getIcon(key) });
+            flatItems.push({
+              label: resolveRoleAwareLabel(option.option_na, key),
+              key,
+              icon: getIcon(key),
+            });
           }
           continue;
         }
 
-        const key = resolveModuleKey(menu.menu_na);
+        const key = resolveRoleAwareModuleKey(resolveModuleKey(menu.menu_na), canReviewAllRequests);
         if (seen.has(key)) continue;
         seen.add(key);
-        flatItems.push({ label: formatNavigationLabel(menu.menu_na), key, icon: getIcon(key) });
+        flatItems.push({
+          label: resolveRoleAwareLabel(menu.menu_na, key),
+          key,
+          icon: getIcon(key),
+        });
       }
 
       if (flatItems.length > 0) return flatItems;
@@ -269,6 +327,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     // Subsistemas con un solo menú y pocas opciones → mostrar menús directamente
     // Subsistemas con múltiples menús → mostrar como grupo expandible
     const items: { label: string; key: string; icon: ReactNode; subsystemId?: number }[] = [];
+    const seen = new Set<string>();
 
     for (const sub of navigation) {
       const menus = sub.menus ?? [];
@@ -276,8 +335,14 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
 
       if (menus.length === 1 && (menus[0].options?.length ?? 0) <= 1) {
         // Subsistema con 1 menú y 0-1 opciones → render plano
-        const key = resolveModuleKey(menus[0].menu_na);
-        items.push({ label: formatNavigationLabel(menus[0].menu_na), key, icon: getIcon(key) });
+        const key = resolveRoleAwareModuleKey(resolveModuleKey(menus[0].menu_na), canReviewAllRequests);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          label: resolveRoleAwareLabel(menus[0].menu_na, key),
+          key,
+          icon: getIcon(key),
+        });
       } else {
         // Subsistema con múltiples menús → render como grupo
         items.push({
@@ -290,7 +355,14 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     }
 
     return items;
-  }, [navigation, hasDynamicNav]);
+  }, [navigation, hasDynamicNav, canReviewAllRequests]);
+
+  useEffect(() => {
+    if (!canReviewAllRequests) return;
+    if (view.type === "module" && view.moduleKey === "solicitudes") {
+      setView({ type: "module", moduleKey: "prestamos_admin" });
+    }
+  }, [canReviewAllRequests, view]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -349,6 +421,17 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
           <URULogo size="sm" />
         </div>
         <div className="flex items-center gap-2">
+          {canReviewAllRequests && (
+            <button
+              type="button"
+              onClick={() => setView({ type: "module", moduleKey: "prestamos_admin" })}
+              className="hidden sm:flex items-center gap-2 rounded-full border border-white/30 dark:border-border bg-white/10 dark:bg-secondary/40 px-3 py-1 hover:bg-white/20 dark:hover:bg-secondary/60 transition-colors"
+              title="Ir a gestion de solicitudes"
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span className="text-xs font-semibold">Pendientes: {pendingRequestsCount}</span>
+            </button>
+          )}
           <ThemeToggle />
           <NotificationsPanel />
           <Button variant="ghost" size="icon" onClick={handleLogout} disabled={isLoggingOut} title="Cerrar sesión" className="text-white dark:text-foreground hover:bg-white/10 dark:hover:bg-secondary text-destructive hover:text-destructive">
@@ -399,7 +482,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
 
         {/* Main content */}
         <main className="flex-1 overflow-auto p-6">
-          {children || <MainContent view={view} navigation={navigation} hasDynamicNav={hasDynamicNav} sidebarItems={sidebarItems} onNavigate={setView} goHome={goHome} />}
+          {children || <MainContent view={view} navigation={navigation} hasDynamicNav={hasDynamicNav} sidebarItems={sidebarItems} onNavigate={setView} goHome={goHome} canReviewAllRequests={canReviewAllRequests} />}
         </main>
       </div>
     </div>
@@ -415,9 +498,10 @@ interface MainContentProps {
   sidebarItems: { label: string; key: string; icon: ReactNode; subsystemId?: number }[];
   onNavigate: (v: ViewState) => void;
   goHome: () => void;
+  canReviewAllRequests: boolean;
 }
 
-const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate, goHome }: MainContentProps) => {
+const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate, goHome, canReviewAllRequests }: MainContentProps) => {
   // Renderizar módulo específico
   if (view.type === "module") {
     const renderer = moduleRegistry[view.moduleKey];
@@ -444,12 +528,20 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
       // Si el menú tiene opciones, mostrar las opciones
       if (menu.options && menu.options.length > 0) {
         return menu.options.map((opt) => ({
-          label: opt.option_na,
-          key: resolveModuleKey(opt.option_na),
+          label: resolveRoleAwareLabel(opt.option_na, resolveRoleAwareModuleKey(resolveModuleKey(opt.option_na), canReviewAllRequests)),
+          key: resolveRoleAwareModuleKey(resolveModuleKey(opt.option_na), canReviewAllRequests),
         }));
       }
       // Si no tiene opciones, mostrar el menú como item
-      return [{ label: menu.menu_na, key: resolveModuleKey(menu.menu_na) }];
+      const key = resolveRoleAwareModuleKey(resolveModuleKey(menu.menu_na), canReviewAllRequests);
+      return [{ label: resolveRoleAwareLabel(menu.menu_na, key), key }];
+    });
+
+    const seen = new Set<string>();
+    const dedupedItems = allItems.filter((item) => {
+      if (seen.has(item.key)) return false;
+      seen.add(item.key);
+      return true;
     });
 
     return (
@@ -457,7 +549,7 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
         <BackButton onClick={goHome} />
         <h2 className="text-xl font-bold text-foreground mb-6">{sub.subsystem_na}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {allItems.map((item) => (
+          {dedupedItems.map((item) => (
             <button
               key={item.key}
               onClick={() => onNavigate({ type: "module", moduleKey: item.key, parentSubsystemId: view.subsystemId })}
@@ -466,7 +558,7 @@ const MainContent = ({ view, navigation, hasDynamicNav, sidebarItems, onNavigate
               <div className="text-accent group-hover:text-lab-blue-glow transition-colors [&>svg]:w-8 [&>svg]:h-8">
                 {getIcon(item.key)}
               </div>
-              <span className="text-sm font-medium text-foreground text-center">{formatNavigationLabel(item.label)}</span>
+              <span className="text-sm font-medium text-foreground text-center">{item.label}</span>
             </button>
           ))}
         </div>

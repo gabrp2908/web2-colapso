@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { HandCoins, Search, Clock, AlertTriangle, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { useLoanList } from "@/hooks/useLoan";
 import { useAuth } from "@/contexts/AuthContext";
+import { resolveLoanStatus, getDueLabel } from "@/lib/loanStatus";
 
 const estadoBadge: Record<string, { className: string; label: string }> = {
   active: { className: "bg-primary/20 text-primary border-primary/30", label: "Activo" },
@@ -37,12 +38,17 @@ const PrestamosModule = () => {
       id.toLowerCase().includes(search.toLowerCase());
 
     if (filtro === "todos") return matchSearch;
-    const status = p.movement_status ?? p.estado ?? "";
+    const status = resolveLoanStatus(p);
     return matchSearch && status === filtro;
   });
 
   const countByStatus = (status: string) =>
-    loans.filter((p: any) => (p.movement_status ?? p.estado) === status).length;
+    loans.filter((p: any) => resolveLoanStatus(p) === status).length;
+
+  const pendientesPorDevolver = loans.filter((p: any) => {
+    const status = resolveLoanStatus(p);
+    return status === "active" || status === "overdue";
+  }).length;
 
   if (isLoading) {
     return (
@@ -70,7 +76,7 @@ const PrestamosModule = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("active")}</p><p className="text-xs text-muted-foreground">Activos</p></div></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3"><Clock className="w-5 h-5 text-primary" /><div><p className="text-2xl font-bold text-foreground">{pendientesPorDevolver}</p><p className="text-xs text-muted-foreground">Pendientes por devolver</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><AlertTriangle className="w-5 h-5 text-destructive" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("overdue")}</p><p className="text-xs text-muted-foreground">Vencidos</p></div></CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3"><CheckCircle className="w-5 h-5 text-accent" /><div><p className="text-2xl font-bold text-foreground">{countByStatus("returned")}</p><p className="text-xs text-muted-foreground">Devueltos</p></div></CardContent></Card>
       </div>
@@ -102,12 +108,13 @@ const PrestamosModule = () => {
                 <TableHead>Observación</TableHead>
                 <TableHead>Fecha Préstamo</TableHead>
                 <TableHead>Fecha Estimada Retorno</TableHead>
+                <TableHead>Cumplimiento</TableHead>
                 <TableHead>Estado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((p: any) => {
-                const status = p.movement_status ?? "pending";
+                const status = resolveLoanStatus(p);
                 const badge = getEstadoBadge(status);
                 return (
                   <TableRow key={p.movement_id}>
@@ -115,6 +122,7 @@ const PrestamosModule = () => {
                     <TableCell>{p.movement_ob ?? "—"}</TableCell>
                     <TableCell>{p.movement_booking_dt ?? "—"}</TableCell>
                     <TableCell>{p.movement_estimated_return_dt ?? "—"}</TableCell>
+                    <TableCell>{getDueLabel(p)}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={badge.className}>{badge.label}</Badge>
                     </TableCell>
@@ -122,7 +130,7 @@ const PrestamosModule = () => {
                 );
               })}
               {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No se encontraron préstamos</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No se encontraron préstamos</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

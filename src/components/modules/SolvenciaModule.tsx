@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, AlertTriangle, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLoanList } from "@/hooks/useLoan";
+import { resolveLoanStatus } from "@/lib/loanStatus";
 
 const SolvenciaModule = () => {
   const { user } = useAuth();
@@ -12,9 +13,9 @@ const SolvenciaModule = () => {
 
   const loans: any[] = Array.isArray(data?.data) ? data.data : [];
 
-  const activos = loans.filter((l: any) => l.loan_status === "active" || l.loan_status === "activo").length;
-  const vencidos = loans.filter((l: any) => l.loan_status === "overdue" || l.loan_status === "vencido").length;
-  const devueltos = loans.filter((l: any) => l.loan_status === "returned" || l.loan_status === "devuelto").length;
+  const activos = loans.filter((l: any) => resolveLoanStatus(l) === "active").length;
+  const vencidos = loans.filter((l: any) => resolveLoanStatus(l) === "overdue").length;
+  const devueltos = loans.filter((l: any) => resolveLoanStatus(l) === "returned").length;
   const esSolvente = vencidos === 0 && activos === 0;
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary mr-2" /><span className="text-muted-foreground">Consultando solvencia...</span></div>;

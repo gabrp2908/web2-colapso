@@ -37,6 +37,7 @@ type DevolutionEntity = {
 const DevolucionesModule = () => {
   const { data, isLoading, refetch } = useDevolutionList();
   const registerMutation = useCreateDevolution();
+  const [processingMovements, setProcessingMovements] = useState<Set<number>>(new Set());
 
   const devoluciones: DevolutionSummary[] = useMemo(() => {
     const rows = data?.data;
@@ -61,8 +62,11 @@ const DevolucionesModule = () => {
   const handleDevolucion = async () => {
     if (!selectedMovement) return;
 
+    const movementId = selectedMovement.movement_id;
+    const devolutionObservation = observaciones;
+
     try {
-      const response = await devolutionService.get(selectedMovement.movement_id);
+      const response = await devolutionService.get(movementId);
       const entity = response?.data as DevolutionEntity | undefined;
       const details = Array.isArray(entity?.details) ? entity.details : [];
 
@@ -77,19 +81,31 @@ const DevolucionesModule = () => {
         condition,
       }));
 
-      await registerMutation.mutateAsync({
-        movement_id: selectedMovement.movement_id,
-        devolution_ob: observaciones,
-        details: payloadDetails,
+      setProcessingMovements((prev) => {
+        const next = new Set(prev);
+        next.add(movementId);
+        return next;
       });
 
-      toast({ title: "Devolución registrada", description: `Movimiento #${selectedMovement.movement_id} actualizado` });
       setDialogOpen(false);
       setSelectedMovement(null);
       setObservaciones("");
       setCondition("good");
+
+      await registerMutation.mutateAsync({
+        movement_id: movementId,
+        devolution_ob: devolutionObservation,
+        details: payloadDetails,
+      });
+
+      toast({ title: "Devolución registrada", description: `Movimiento #${movementId} actualizado` });
       await refetch();
     } catch {
+      setProcessingMovements((prev) => {
+        const next = new Set(prev);
+        next.delete(movementId);
+        return next;
+      });
       toast({ title: "Error", description: "No se pudo registrar la devolución", variant: "destructive" });
       return;
     }
@@ -148,9 +164,13 @@ const DevolucionesModule = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" onClick={() => { setSelectedMovement(p); setDialogOpen(true); }}>
-                      Registrar
-                    </Button>
+                    {p.pending_items > 0 && !processingMovements.has(p.movement_id) ? (
+                      <Button size="sm" onClick={() => { setSelectedMovement(p); setDialogOpen(true); }}>
+                        Registrar
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{processingMovements.has(p.movement_id) ? "Procesando..." : "Sin acción"}</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

@@ -14,6 +14,7 @@ import { useRequestList, useCreateRequest } from "@/hooks/useLoan";
 import { useInventoryList } from "@/hooks/useInventory";
 import { useCategoryList } from "@/hooks/useCatalogues";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatLoanDateYmd } from "@/lib/loanStatus";
 
 const estadoConfig: Record<string, { icon: React.ReactNode; class: string; label: string }> = {
   pending: { icon: <Clock className="w-3.5 h-3.5" />, class: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "Pendiente" },
@@ -24,6 +25,21 @@ const estadoConfig: Record<string, { icon: React.ReactNode; class: string; label
 interface CartItem {
   inv: any;
   qty: number;
+}
+
+function normalizeRequestStatus(value: unknown): "pending" | "approved" | "rejected" {
+  const status = String(value ?? "").toLowerCase();
+  if (status.includes("rechaz") || status === "rejected") return "rejected";
+  if (status.includes("acept") || status === "approved") return "approved";
+  return "pending";
+}
+
+function formatRequestDate(...values: Array<unknown>): string {
+  for (const value of values) {
+    const formatted = formatLoanDateYmd(value);
+    if (formatted) return formatted;
+  }
+  return "—";
 }
 
 const SolicitudesModule = () => {
@@ -299,13 +315,13 @@ const SolicitudesModule = () => {
             </TableHeader>
             <TableBody>
               {solicitudes.map((sol: any) => {
-                const status = sol.movement_status ?? "pending";
+                const status = normalizeRequestStatus(sol.movement_status ?? sol.movement_type_de);
                 const cfg = estadoConfig[status] ?? estadoConfig.pending;
                 return (
                   <TableRow key={sol.movement_id} className="border-border hover:bg-muted/30 transition-colors">
                     <TableCell className="font-mono text-xs text-accent">{sol.movement_id}</TableCell>
                     <TableCell className="font-medium text-sm">{sol.movement_ob ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{sol.movement_created_dt ?? sol.created_at ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{formatRequestDate(sol.movement_created_dt, sol.created_at, sol.movement_booking_dt)}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={`gap-1 w-full justify-center ${cfg.class}`}>
                         {cfg.icon}

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Bell, CheckCheck, Clock, Info, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { useNotificationList } from "@/hooks/useSecurity";
+import { useNotificationList, useUpdateNotification } from "@/hooks/useSecurity";
 import { useAuth } from "@/contexts/AuthContext";
 
 
@@ -20,6 +20,7 @@ type NotificationRow = {
   notification_ty?: string | null;
   notification_tit?: string | null;
   notification_msg?: string | null;
+  notification_read?: boolean;
   notification_dt?: string | null;
 };
 
@@ -54,8 +55,10 @@ function mapType(value?: string | null): Notificacion["tipo"] {
 
 const NotificationsPanel = () => {
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
+  const [processingIds, setProcessingIds] = useState<Set<number>>(new Set());
   const [mostrarTodas, setMostrarTodas] = useState(false);
   const { user } = useAuth();
+  const updateNotification = useUpdateNotification();
   const { data: notificationsResponse } = useNotificationList(
     user?.userId ? { user_id: user.userId } : undefined
   );
@@ -67,23 +70,79 @@ const NotificationsPanel = () => {
       titulo: row.notification_tit ?? "Notificación",
       mensaje: row.notification_msg ?? "",
       fecha: toRelativeDate(row.notification_dt),
-      leida: readIds.has(row.notification_id),
+      leida: Boolean(row.notification_read) || readIds.has(row.notification_id),
       tipo: mapType(row.notification_ty),
     }));
   }, [notificationsResponse, readIds]);
 
   const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
-  const marcarTodasLeidas = () => {
-    setReadIds(new Set(notificaciones.map((n) => n.id)));
+  const marcarTodasLeidas = async () => {
+    const unreadIds = notificaciones.filter((n) => !n.leida).map((n) => n.id);
+    if (unreadIds.length === 0) return;
+
+    setReadIds((prev) => {
+      const next = new Set(prev);
+      unreadIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      unreadIds.forEach((id) => next.add(id));
+      return next;
+    });
+
+    const results = await Promise.allSettled(
+      unreadIds.map((id) => updateNotification.mutateAsync({ id, notification_read: true }))
+    );
+
+    const failedIds = unreadIds.filter((_, idx) => results[idx].status === "rejected");
+    if (failedIds.length > 0) {
+      setReadIds((prev) => {
+        const next = new Set(prev);
+        failedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      unreadIds.forEach((id) => next.delete(id));
+      return next;
+    });
   };
 
-  const marcarLeida = (id: number) => {
+  const marcarLeida = async (id: number) => {
+    if (processingIds.has(id)) return;
+
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
     setReadIds((prev) => {
       const next = new Set(prev);
       next.add(id);
       return next;
     });
+
+    try {
+      await updateNotification.mutateAsync({ id, notification_read: true });
+    } catch {
+      setReadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const visibles = mostrarTodas ? notificaciones : notificaciones.slice(0, 4);
@@ -104,7 +163,7 @@ const NotificationsPanel = () => {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h3 className="font-semibold text-sm text-foreground">Notificaciones</h3>
           {noLeidas > 0 && (
-            <Button variant="ghost" size="sm" className="text-xs text-accent h-auto py-1" onClick={marcarTodasLeidas}>
+            <Button variant="ghost" size="sm" className="text-xs text-accent h-auto py-1" onClick={() => void marcarTodasLeidas()}>
               Marcar todas como leídas
             </Button>
           )}
@@ -117,7 +176,7 @@ const NotificationsPanel = () => {
               {visibles.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => marcarLeida(n.id)}
+                  onClick={() => void marcarLeida(n.id)}
                   className={`w-full text-left px-4 py-3 border-b border-border last:border-0 transition-colors hover:bg-secondary/50 ${
                     !n.leida ? "bg-secondary/30" : ""
                   }`}

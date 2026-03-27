@@ -10,7 +10,7 @@ export const devolutionService = {
   create: (params: Record<string, unknown>): Promise<ApiResponse> =>
     dispatch(TX.DEV_CREATE, params),
   register: (params: Record<string, unknown>): Promise<ApiResponse> =>
-    dispatch(TX.DEV_CREATE, params),
+    dispatch(TX.DEV_REGISTER_DEVOLUTION, params),
   update: (params: { id: number; [key: string]: unknown }): Promise<ApiResponse> =>
     dispatch(TX.DEV_UPDATE, params),
   delete: (id: number): Promise<ApiResponse> =>
