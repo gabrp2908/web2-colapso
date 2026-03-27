@@ -16,7 +16,6 @@ import DevolucionesModule from "./modules/DevolucionesModule";
 import PrestamosModule from "./modules/PrestamosModule";
 import NotificarModule from "./modules/NotificarModule";
 import MantenimientoModule from "./modules/MantenimientoModule";
-import AuditoriaModule from "./modules/AuditoriaModule";
 import PrestamosAdminModule from "./modules/negocio/PrestamosAdminModule";
 import DevolucionesAdminModule from "./modules/negocio/DevolucionesAdminModule";
 import NotificacionesAdminModule from "./modules/negocio/NotificacionesAdminModule";
@@ -57,7 +56,6 @@ const moduleRegistry: Record<string, ModuleRenderer> = {
   notificar: (b) => <><BackButton onClick={b} /><NotificarModule /></>,
   permisos: (b) => <PerfilModule onBack={b} />,
   mantenimiento: (b) => <><BackButton onClick={b} /><MantenimientoModule /></>,
-  auditoria: (b) => <><BackButton onClick={b} /><AuditoriaModule /></>,
   prestamos_admin: (b) => <PrestamosAdminModule onBack={b} />,
   devoluciones_admin: (b) => <DevolucionesAdminModule onBack={b} />,
   notificaciones_admin: (b) => <NotificacionesAdminModule onBack={b} />,
@@ -111,9 +109,6 @@ function resolveModuleKey(name: string): string {
     "permissions": "permisos",
     "mantenimiento": "mantenimiento",
     "maintenance": "mantenimiento",
-    "auditoría": "auditoria",
-    "auditoria": "auditoria",
-    "audit": "auditoria",
     "usuarios": "usuarios",
     "users": "usuarios",
     "personas": "personas",
@@ -165,7 +160,6 @@ const iconMap: Record<string, ReactNode> = {
   notificar: <Send className="w-5 h-5" />,
   permisos: <Key className="w-5 h-5" />,
   mantenimiento: <Wrench className="w-5 h-5" />,
-  auditoria: <ClipboardList className="w-5 h-5" />,
   usuarios: <Users className="w-5 h-5" />,
   personas: <UserCircle className="w-5 h-5" />,
   grupos: <Users className="w-5 h-5" />,
